@@ -39,8 +39,8 @@ tᵢ         = planning : ETA_total_ORS × (distanceᵢ / Σ distance)
 
 ### 2.1 `VE` — laju ventilasi
 
-| Var | Arti | Nilai | Status |
-| --- | --- | --- | --- |
+| Var  | Arti                          | Nilai                       | Status                         |
+| ---- | ----------------------------- | --------------------------- | ------------------------------ |
 | `VE` | Laju ventilasi saat bersepeda | **0.040 m³/min (40 L/min)** | Fallback yang dipakai sekarang |
 
 - Nilai ini dipakai **sekarang dan seterusnya sebagai fallback** kalau data heart rate gak tersedia.
@@ -69,7 +69,7 @@ Faktor moda **sengaja dihapus dari rumus.** Ini keputusan terdokumentasi, bukan 
 
 1. **Buat pesepeda angkanya mendekati 1.0, bukan 1.5.** Studi yang ngebandingin 6 moda di rute yang sama, dinormalisasi ke background: bus 1.65, metro 1.51, jalan kaki 1.33, trem 1.31, mobil 1.09, **sepeda 1.06** — paling rendah dari semua moda. Masuk akal secara fisik: motor duduk di tengah arus persis di belakang knalpot, pesepeda menepi ke bahu jalan / jalur sepeda.
 
-2. **Risiko double counting dengan `M_road`.** Dua-duanya narik dari kolam literatur yang sama (*roadside increment studies*). `M_road = 1.25` udah bilang "pinggir arteri lebih kotor dari ambient"; `F_moda = 1.5` bilang lagi hal yang mirip. Dipasang dua-duanya → `1.25 × 1.5 = 1.875×` di atas ambient untuk arteri, susah dipertahanin.
+2. **Risiko double counting dengan `M_road`.** Dua-duanya narik dari kolam literatur yang sama (_roadside increment studies_). `M_road = 1.25` udah bilang "pinggir arteri lebih kotor dari ambient"; `F_moda = 1.5` bilang lagi hal yang mirip. Dipasang dua-duanya → `1.25 × 1.5 = 1.875×` di atas ambient untuk arteri, susah dipertahanin.
 
 **Keputusan:** efek pinggir jalan sepenuhnya dibawa `M_road`. `F_moda` = 1.0, dihilangkan dari rumus.
 
@@ -83,40 +83,55 @@ C_base(cell) = expm1( model_gbr_v4_log.predict([
 ]) )
 ```
 
-| Var | Asal | Catatan |
-| --- | --- | --- |
-| `base_pm25` | Open-Meteo Air Quality API (CAMS) | Resolusi **0.4° ≈ 44 km** (CAMS global) |
-| `wind_speed` | Open-Meteo Forecast API | **Wajib m/s** — API default-nya km/jam |
-| `relative_humidity` | Open-Meteo Forecast API | % |
-| `hour_of_day` | Jam device | **WIB, bukan UTC, bukan `TimeZone.current`** |
-| `is_weekend` | Hari device | 0/1, dari WIB |
-| output | `CleanRoutePM25.mlmodel` (GBR, skala log) | **Wajib `expm1()`** — lupa ini = dosis salah ~50× |
+| Var                 | Asal                                      | Catatan                                                                                                                                |
+| ------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `base_pm25`         | Open-Meteo Air Quality API (CAMS)         | Resolusi nominal **0.4° ≈ 44 km** (CAMS global) — lihat catatan §3.1 soal kenapa nominal ini gak bisa dipakai langsung buat kuantisasi |
+| `wind_speed`        | Open-Meteo Forecast API                   | **Wajib m/s** — API default-nya km/jam                                                                                                 |
+| `relative_humidity` | Open-Meteo Forecast API                   | %                                                                                                                                      |
+| `hour_of_day`       | Jam device                                | **WIB, bukan UTC, bukan `TimeZone.current`**                                                                                           |
+| `is_weekend`        | Hari device                               | 0/1, dari WIB                                                                                                                          |
+| output              | `CleanRoutePM25.mlmodel` (GBR, skala log) | **Wajib `expm1()`** — lupa ini = dosis salah ~50×                                                                                      |
 
-### 3.1 Granularitas: per CAMS cell, bukan per segmen, bukan per rute
+### 3.1 Granularitas: per grup fetch berbasis jarak, bukan per segmen, bukan per rute
 
-Ini perubahan dari versi sebelumnya yang nulis fetch per segmen.
+> **Revisi.** Versi sebelumnya dokumen ini nyuruh kuantisasi grid lewat `floor(lat/0.4), floor(lon/0.4)` buat nentuin "segmen mana masuk cell CAMS mana". **Pendekatan itu salah, dan udah dikonfirmasi salah secara empiris** — lihat kotak temuan di bawah. Section ini ditulis ulang total. Kalau nemu kode yang masih pakai `floor(coord / 0.4)` buat dedup fetch, itu implementasi versi lama, harus diganti.
 
-Alasannya: grid CAMS global 0.4° ≈ 44 km. Untuk rute pendek, fetch per segmen artinya ratusan request buat angka yang **identik persis**. Tapi pesepeda bisa nempuh > 44 km, dan rute segitu pasti nyebrang cell — jadi "1 fetch per rute" juga salah.
+**Temuan yang membatalkan pendekatan lama:**
 
-Aturan yang bener:
+Rute uji dari `(-6.262199, 106.668267)` ke `(-6.177820, 106.790758)`, 120 segmen. Titik awal dan titik akhir, kalau dihitung pakai `floor(coord/0.4)`, jatuh di cell grid yang **sama persis** (`lat_idx = -16`, `lon_idx = 266` buat dua-duanya). Tapi query langsung ke Open-Meteo di dua koordinat itu ngasih `base_pm25` **52.5 vs 40.2** — beda ~23%, padahal menurut kuantisasi grid harusnya identik.
 
-1. Tiap segmen dipetakan ke index cell: `floor(lat / 0.4)`, `floor(lon / 0.4)`.
-2. Dedupe → himpunan cell unik yang dilewati rute.
-3. Fetch air quality + weather **1× per cell unik**, pakai koordinat centroid cell.
-4. Panggil CoreML **1× per cell unik** → `C_base` per cell.
-5. Tiap segmen ambil `C_base` dari cell-nya sendiri.
+Ini bukan bug di kode dedup — kodenya udah bener ngikutin rumus `floor()`. Masalahnya di **asumsi di balik rumus itu**: kita anggap Open-Meteo ngasih nilai step-function per grid 0.4° (nilai konstan di dalam satu cell, lompat di batas). Kenyataannya kemungkinan besar salah satu dari ini:
 
-Rute 10 km → 1 fetch. Rute 60 km → 2–3 fetch. Cap keras **8 fetch per request**; kalau lebih, kasih tau user rutenya di luar cakupan yang divalidasi dan jangan lanjut diam-diam.
+1. Open-Meteo **interpolasi kontinu** antar node CAMS (bilinear atau semacamnya) sebelum ngasih hasil ke caller, bukan nearest-neighbor.
+2. Grid CAMS asli **gak align** ke kelipatan bulat 0.4° dari (0,0), jadi batas cell yang kita hitung sendiri gak nyerempet batas cell yang beneran dipakai di belakang API.
 
-**Jangan interpolasi antar cell.** Nilai per cell dipakai apa adanya. Batas cell bikin `Cᵢ` melompat, dan itu representasi jujur dari resolusi CAMS — bukan artefak yang perlu dihaluskan.
+Dua-duanya sama akibatnya: **kuantisasi grid gak bisa dipakai buat nebak "titik ini masih di area yang sama secara PM2.5 atau udah beda."**
 
-> Catatan: angka "~11 km" di `v4-summary.md` §2 itu stale — 11 km adalah resolusi CAMS **Europe**. Indonesia dilayani CAMS **global**, 0.4° ≈ 44 km. Angka 44 km yang operatif.
+**Pendekatan baru: clustering berbasis jarak, bukan grid quantization.**
+
+1. Jalan segmen demi segmen sesuai urutan rute.
+2. Segmen pertama jadi titik referensi grup-1.
+3. Segmen berikutnya: kalau jaraknya (`CLLocation.distance(from:)`, bukan Euclidean derajat) dari titik referensi grup aktif **≤ threshold**, masuk grup itu. Kalau lebih jauh dari threshold, segmen ini jadi titik referensi grup baru.
+4. Ulangi sampai semua segmen ke-assign ke satu grup.
+5. Fetch air quality + weather **1× per grup**, pakai koordinat titik referensi grup (bukan centroid — titik referensi lebih murah dihitung dan cukup representatif selama threshold cukup kecil).
+6. Panggil CoreML **1× per grup** → `C_base` per grup.
+7. Tiap segmen ambil `C_base` dari grup tempat dia di-assign.
+
+**Threshold jarak: `20 km`, berlaku sebagai nilai provisional, bukan final.** Ini ~separuh dari resolusi nominal CAMS (44 km), dipilih konservatif karena kita udah tau nominal itu gak bisa dipercaya persis. Belum divalidasi lewat sampling sistematis. **Open item** (lihat §9) — sebelum threshold ini dipatenkan, perlu sampling beberapa titik lagi di sepanjang rute yang sama (misal tiap ~5 km) buat liat pola perubahan `base_pm25`-nya: kalau berubahnya smooth/gradual, threshold kecil (10–15 km) lebih aman; kalau ternyata ada lompatan tajam di titik tertentu lalu konsisten lagi di kedua sisi, itu petunjuk ada batas real di situ dan threshold bisa disesuaikan.
+
+Rute pendek (< threshold total) → 1 fetch. Rute panjang → beberapa fetch, jumlahnya emergent dari clustering, bukan dari hitungan cell grid manapun.
+
+**Cap keras tetap 8 fetch per request** (sekarang dihitung dari jumlah grup hasil clustering, bukan dari jumlah cell unik); kalau lebih, kasih tau user rutenya di luar cakupan yang divalidasi dan jangan lanjut diam-diam.
+
+**Soal "jangan interpolasi antar cell" — klaim ini direvisi.** Versi dokumen sebelumnya bilang batas cell yang bikin `Cᵢ` melompat itu "representasi jujur dari resolusi CAMS, bukan artefak yang perlu dihaluskan." Klaim itu **udah gak valid** buat cara kita ambil data sekarang: temuan di atas nunjukin Open-Meteo kemungkinan besar udah interpolasi sendiri secara internal, jadi model step-function yang diasumsikan sepanjang dokumen ini gak akurat. Yang kita kontrol sekarang bukan "batas cell CAMS yang jujur", tapi **granularitas grup fetch kita sendiri** — makin kecil threshold, makin sering fetch, makin dekat ke "nilai kontinu asli" tapi makin mahal secara request budget (cap 8). Trade-off ini eksplisit, dan threshold 20 km adalah titik keseimbangan sementara, bukan angka yang diturunkan dari sifat CAMS yang sebenarnya.
+
+> Catatan: angka "~11 km" di `v4-summary.md` §2 itu stale — 11 km adalah resolusi CAMS **Europe**. Indonesia dilayani CAMS **global**, nominal 0.4° ≈ 44 km — tapi lihat catatan di atas, angka nominal ini sekarang cuma dipakai sebagai justifikasi kasar buat threshold, bukan buat kuantisasi langsung.
 
 ### 3.2 Granularitas waktu di live mode
 
 Ride sepeda gampang lewat batas jam. `hour_of_day` adalah fitur ML terkuat kedua (20% importance) dan pola bias CAMS berubah tajam sore–malam (kelebihan ~20 µg/m³ jam 18–05, cuma ~5 di siang hari).
 
-- Tiap pergantian jam WIB selama ride: re-fetch Open-Meteo untuk cell aktif dan re-prediksi `C_base`.
+- Tiap pergantian jam WIB selama ride: re-fetch Open-Meteo untuk grup aktif dan re-prediksi `C_base`.
 - Segmen yang udah selesai **tetap** pakai `C_base` yang berlaku waktu itu. Jangan di-retro-fit.
 
 ### 3.3 Sifat model
@@ -142,18 +157,18 @@ M_road,ᵢ  = lookup(road_classᵢ)     dari roads_data.json
 M_green,ᵢ = 1 − 0.05 × greenery_indexᵢ
 ```
 
-| road_class | Contoh | M_road | Asal |
-| --- | --- | --- | --- |
-| 1 (tol) | — | tidak muncul (§4.2) | Legal — sepeda dilarang masuk tol |
-| 2 (arteri) | Jl. Sudirman | 1.25 | Studi roadside-increment (literatur) |
-| 3 (kolektor) | Jalan raya biasa | 1.15 | idem |
-| 4 (lokal) | Gang, komplek | 1.00 | idem |
+| road_class   | Contoh           | M_road              | Asal                                 |
+| ------------ | ---------------- | ------------------- | ------------------------------------ |
+| 1 (tol)      | —                | tidak muncul (§4.2) | Legal — sepeda dilarang masuk tol    |
+| 2 (arteri)   | Jl. Sudirman     | 1.25                | Studi roadside-increment (literatur) |
+| 3 (kolektor) | Jalan raya biasa | 1.15                | idem                                 |
+| 4 (lokal)    | Gang, komplek    | 1.00                | idem                                 |
 
-`road_classᵢ` dan `greenery_indexᵢ` didapat dari lookup koordinat segmen ke `roads_data.json` (grid precomputed dari OpenStreetMap, 147.027 cell, resolusi ~166m). **Bukan** dari model ML, **bukan** dari ORS. Lookup ini tetap **per segmen** — inilah satu-satunya bagian yang beneran butuh granularitas per segmen.
+`road_classᵢ` dan `greenery_indexᵢ` didapat dari lookup koordinat segmen ke `roads_data.json` (grid precomputed dari OpenStreetMap, 147.027 cell, resolusi ~166m). **Bukan** dari model ML, **bukan** dari ORS. Lookup ini tetap **per segmen** — inilah satu-satunya bagian yang beneran butuh granularitas per segmen. (Grid 166m ini beda konteks dari grup fetch CAMS di §3.1 — jangan ketuker; grid `roads_data.json` udah precomputed dan align-nya diketahui, gak punya masalah yang sama kayak asumsi grid CAMS.)
 
 **Sifat penting:** ini satu-satunya sumber diferensiasi spasial untuk rute pendek. `base_pm25` (~44 km) dan model ML gak bisa bedain jalan arteri dari gang — yang bikin dua rute punya dosis beda hampir seluruhnya berasal dari lapisan ini. Setelah `F_moda` dihapus, lapisan ini juga satu-satunya yang membawa efek pinggir jalan (§2.2).
 
-(Untuk rute panjang yang nyebrang CAMS cell, `C_base` mulai ikut berkontribusi ke perbedaan. Kecil, tapi bukan nol lagi — jangan bilang "kontribusi ML ke ranking selalu nol".)
+(Untuk rute panjang yang nyebrang grup fetch CAMS, `C_base` mulai ikut berkontribusi ke perbedaan. Kecil, tapi bukan nol lagi — jangan bilang "kontribusi ML ke ranking selalu nol".)
 
 ### 4.1 Penanganan cell bermasalah
 
@@ -187,10 +202,10 @@ Ada **dua mode** dan bedanya fundamental. Jangan campur.
 tᵢ = ETA_total_ORS × (distanceᵢ / Σ distance)
 ```
 
-| Var | Asal |
-| --- | --- |
+| Var             | Asal                                                                                 |
+| --------------- | ------------------------------------------------------------------------------------ |
 | `ETA_total_ORS` | `features[].properties.summary.duration` (detik) — satu angka utuh buat seluruh rute |
-| `distanceᵢ` | Panjang segmen (~200m), hasil potong polyline ORS |
+| `distanceᵢ`     | Panjang segmen (~200m), hasil potong polyline ORS                                    |
 
 - `congestion_ratio` = **1.0 seragam**, jadi bobot waktu = proporsi jarak murni. Ini keputusan terukur, bukan kelalaian: simulasi Monte Carlo nunjukin 0 dari 30 ranking flip. **Tabel lookup 144-cell sengaja tidak dibangun.**
 - `duration` dari profil `cycling-regular` **valid apa adanya** untuk pesepeda. Gak ada faktor koreksi kecepatan. (Ini beda dari versi motor, di mana profil sepeda cuma proxy dan durasinya kepanjangan.)
@@ -242,7 +257,7 @@ Perilaku: user masuk segmen-1 → timer segmen-1 mulai dari 0. User keluar zona 
 - Tiap segmen simpan: index, koordinat awal/akhir, **jarak kumulatif awal & akhir**. Nilai kumulatif itu yang dipakai map-matching di §5.2.
 - Rute 60 km → ~300 segmen. Struktur harus tetap enteng: array of struct.
 - Tiap segmen dipakai buat **2 lookup independen**:
-  - koordinat → CAMS cell → `C_base` (§3, di-share antar segmen dalam cell yang sama)
+  - koordinat → grup fetch CAMS (jarak, §3.1) → `C_base` (di-share antar segmen dalam grup yang sama)
   - koordinat → grid jalan → `M_road`/`M_green` (§4, per segmen)
 
   Dua-duanya gak saling tahu satu sama lain.
@@ -254,7 +269,7 @@ Perilaku: user masuk segmen-1 → timer segmen-1 mulai dari 0. User keluar zona 
 ```
 OpenRouteService  → ETA_total, geometri polyline, filter tol   (gak tau apa-apa soal PM2.5)
 MapKit            → render peta + geocoding                     (bukan routing)
-Model ML          → C_base per CAMS cell                        (buta lokasi, cuma paham cuaca+waktu)
+Model ML          → C_base per grup fetch CAMS                  (buta lokasi, cuma paham cuaca+waktu)
 roads_data.json   → M_road, M_green per segmen                  (buta cuaca, cuma paham geometri jalan)
 GPS / RideTracker → tᵢ aktual di live mode                      (buta polusi, cuma paham posisi+waktu)
 Formula Swift     → gabungin semua jadi Cᵢ, tᵢ, Σ(Cᵢ×tᵢ)        (satu-satunya titik ketemu)
@@ -282,6 +297,7 @@ Kesalahan di poin 1–4 bikin app **diam-diam salah tanpa error** — gak crash,
      Dosis   : 0.040 × Σ(PM2.5 × M_road × M_green × menit)
 7. Σtᵢ = ETA_total_ORS            ← HANYA di planning mode
    Σtᵢ = durasi terukur           ← di live mode, sengaja beda dari ETA
+8. Fetch CAMS pakai clustering jarak (§3.1)  ← BUKAN floor(lat/0.4), floor(lon/0.4)
 ```
 
 ---
@@ -295,25 +311,27 @@ Kesalahan di poin 1–4 bikin app **diam-diam salah tanpa error** — gak crash,
 - Koefisien `M_road` / `M_green` dari literatur, bukan dipelajari dari data. Struktural (7 stasiun, konstan per stasiun), bukan kemalasan.
 - **Tipe stasiun training belum diverifikasi** (roadside vs background) → risiko double counting di `M_road`, lihat §4.3.
 - **PM2.5 itu polutan yang lemah buat membedakan rute.** Literatur nunjukin diskriminasi antar rute high/low traffic cuma ~1,15×, karena PM2.5 didominasi background regional; penanda yang kuat adalah black carbon dan UFP (2,5× dan 1,9×), dan dua-duanya gak tersedia di CAMS. Ini konsisten dengan temuan internal: arah tebakan cuma **43,75%** benar di pasangan rute kontras ekstrem. Konsekuensinya banyak pasangan rute bakal keluar "paparan setara" — itu gate 20% kerja sesuai desain, bukan bug.
+- **Threshold clustering CAMS (20 km) masih provisional** (§3.1) — belum divalidasi lewat sampling sistematis sepanjang rute. Belum tau apakah perubahan `base_pm25` di lapangan itu gradual (threshold kecil lebih tepat) atau ada lompatan tajam di titik tertentu (threshold perlu disesuaikan ke situ). Jangan klaim threshold ini akurat sebelum divalidasi.
 - Boleh klaim: _"rute dengan komposisi jalan dan waktu tempuh yang paparannya lebih rendah"_. **Tidak boleh** klaim: _"kami menemukan area yang udaranya lebih bersih"_.
 
 ---
 
 ## §10. Perubahan dari Versi Sebelumnya
 
-| # | Versi lama | Sekarang | Alasan |
-| --- | --- | --- | --- |
-| 1 | Target pengendara motor | **Pesepeda** | Pivot produk |
-| 2 | `VE = 0.014 m³/min` | **`0.040 m³/min`** | 0.014 = duduk di kendaraan. Sepeda = aktivitas moderat–berat. Ideal: dari heart rate |
-| 3 | `F_moda = 1.5` | **Dihapus (= 1.0)** | Literatur: paparan PM2.5 pesepeda ~1,06× background (terendah dari 6 moda). Plus risiko double counting dengan `M_road` |
-| 4 | `Dosis = VE × Σ(Cᵢ×tᵢ)` di §1, tapi `0.014 × 1.5 × ...` di §8 | **`VE × Σ(Cᵢ×tᵢ)`** konsisten di dua tempat | Dokumen lama inkonsisten sama dirinya sendiri. Resolve ke bentuk §1 |
-| 5 | 2 lookup independen per segmen (cuaca + jalan) | Cuaca/CAMS **per CAMS cell 0.4°**; jalan tetap **per segmen** | Fetch per segmen redundan total di grid 44 km, tapi "1× per rute" salah buat rute > 44 km |
-| 6 | `tᵢ` selalu pecahan proporsional ETA | Planning proporsional; **live diukur GPS real-time** | Timer per segmen ngilangin proxy `congestion_ratio` sepenuhnya di live mode |
-| 7 | `Σtᵢ = ETA` mutlak | Berlaku **cuma di planning mode** | Live mode `Σtᵢ` = durasi aktual |
-| 8 | Routing pakai `MKDirections` | **OpenRouteService** (`cycling-regular`) | MapKit cuma buat render peta + geocoding |
-| 9 | Filter tol pakai `tollPreference = .avoid` | Ditangani profil cycling ORS | Profil sepeda gak pernah ngasih rute motorway |
-| 10 | `congestion_ratio` = fungsi `hour × road_class × is_weekend` | **1.0 seragam** | Monte Carlo: 0/30 ranking flip. Tabel 144-cell sengaja tidak dibangun |
-| 11 | Resolusi CAMS ditulis 11 km di `v4-summary.md` | **0.4° ≈ 44 km** | 11 km = CAMS Europe. Indonesia pakai CAMS global |
+| #   | Versi lama                                                                  | Sekarang                                                     | Alasan                                                                                                                                                                                                                                                                                                                                                            |
+| --- | --------------------------------------------------------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Target pengendara motor                                                     | **Pesepeda**                                                 | Pivot produk                                                                                                                                                                                                                                                                                                                                                      |
+| 2   | `VE = 0.014 m³/min`                                                         | **`0.040 m³/min`**                                           | 0.014 = duduk di kendaraan. Sepeda = aktivitas moderat–berat. Ideal: dari heart rate                                                                                                                                                                                                                                                                              |
+| 3   | `F_moda = 1.5`                                                              | **Dihapus (= 1.0)**                                          | Literatur: paparan PM2.5 pesepeda ~1,06× background (terendah dari 6 moda). Plus risiko double counting dengan `M_road`                                                                                                                                                                                                                                           |
+| 4   | `Dosis = VE × Σ(Cᵢ×tᵢ)` di §1, tapi `0.014 × 1.5 × ...` di §8               | **`VE × Σ(Cᵢ×tᵢ)`** konsisten di dua tempat                  | Dokumen lama inkonsisten sama dirinya sendiri. Resolve ke bentuk §1                                                                                                                                                                                                                                                                                               |
+| 5   | 2 lookup independen per segmen (cuaca + jalan)                              | Cuaca/CAMS **per grup fetch**; jalan tetap **per segmen**    | Fetch per segmen redundan total di area yang homogen, tapi "1× per rute" salah buat rute jauh                                                                                                                                                                                                                                                                     |
+| 6   | `tᵢ` selalu pecahan proporsional ETA                                        | Planning proporsional; **live diukur GPS real-time**         | Timer per segmen ngilangin proxy `congestion_ratio` sepenuhnya di live mode                                                                                                                                                                                                                                                                                       |
+| 7   | `Σtᵢ = ETA` mutlak                                                          | Berlaku **cuma di planning mode**                            | Live mode `Σtᵢ` = durasi aktual                                                                                                                                                                                                                                                                                                                                   |
+| 8   | Routing pakai `MKDirections`                                                | **OpenRouteService** (`cycling-regular`)                     | MapKit cuma buat render peta + geocoding                                                                                                                                                                                                                                                                                                                          |
+| 9   | Filter tol pakai `tollPreference = .avoid`                                  | Ditangani profil cycling ORS                                 | Profil sepeda gak pernah ngasih rute motorway                                                                                                                                                                                                                                                                                                                     |
+| 10  | `congestion_ratio` = fungsi `hour × road_class × is_weekend`                | **1.0 seragam**                                              | Monte Carlo: 0/30 ranking flip. Tabel 144-cell sengaja tidak dibangun                                                                                                                                                                                                                                                                                             |
+| 11  | Resolusi CAMS ditulis 11 km di `v4-summary.md`                              | **0.4° ≈ 44 km (nominal)**                                   | 11 km = CAMS Europe. Indonesia pakai CAMS global                                                                                                                                                                                                                                                                                                                  |
+| 12  | Dedup fetch CAMS pakai `floor(lat/0.4), floor(lon/0.4)` (grid quantization) | **Clustering berbasis jarak, threshold 20 km (provisional)** | Empiris: dua titik yang menurut floor-division satu cell yang sama ngasih `base_pm25` beda jauh (52,5 vs 40,2, rute uji `-6.262199,106.668267` → `-6.177820,106.790758`, 120 segmen). Grid quantization gak valid buat granularitas Open-Meteo yang sebenarnya — kemungkinan API-nya interpolasi internal, atau grid asli gak align ke kelipatan 0.4°. Lihat §3.1 |
 
 Efek gabungan item 2 + 3 ke angka dosis absolut: `0.014 × 1.5 = 0.021` → `0.040`, naik **~1,9×**. Ranking gak berubah sama sekali.
 
@@ -321,20 +339,20 @@ Efek gabungan item 2 + 3 ke angka dosis absolut: `0.014 × 1.5 = 0.021` → `0.0
 
 ## Lampiran — Contoh Perhitungan (ilustrasi, angka fiktif)
 
-Rute pendek ~4 km, seluruhnya dalam 1 CAMS cell → `C_base = 37,9 µg/m³` konstan. `M_green = 1,00` (greenery 0) buat menyederhanakan.
+Rute pendek ~4 km, seluruhnya dalam 1 grup fetch CAMS → `C_base = 37,9 µg/m³` konstan. `M_green = 1,00` (greenery 0) buat menyederhanakan.
 
 ### Planning mode
 
-| Rute | Segmen | road_class | M_road | Cᵢ | tᵢ (menit) | Cᵢ × tᵢ |
-| --- | --- | --- | --- | --- | --- | --- |
-| **A — lewat arteri** | 1 | arteri | 1,25 | 47,4 | 10 | 474 |
-| | 2 | kolektor | 1,15 | 43,6 | 6 | 262 |
-| | **Total** | | | | **16** | **736** |
-| **B — lewat gang** | 1 | lokal | 1,00 | 37,9 | 9 | 341 |
-| | 2 | kolektor | 1,15 | 43,6 | 8 | 349 |
-| | **Total** | | | | **17** | **690** |
+| Rute                 | Segmen    | road_class | M_road | Cᵢ   | tᵢ (menit) | Cᵢ × tᵢ |
+| -------------------- | --------- | ---------- | ------ | ---- | ---------- | ------- |
+| **A — lewat arteri** | 1         | arteri     | 1,25   | 47,4 | 10         | 474     |
+|                      | 2         | kolektor   | 1,15   | 43,6 | 6          | 262     |
+|                      | **Total** |            |        |      | **16**     | **736** |
+| **B — lewat gang**   | 1         | lokal      | 1,00   | 37,9 | 9          | 341     |
+|                      | 2         | kolektor   | 1,15   | 43,6 | 8          | 349     |
+|                      | **Total** |            |        |      | **17**     | **690** |
 
-`C_base` identik di semua baris (satu cell, model gak bedain lokasi). Beda paparan A (736) vs B (690) murni dari `M_road` per segmen — bukti bahwa diferensiasi spasial di rute pendek 100% berasal dari `roads_data.json`.
+`C_base` identik di semua baris (satu grup fetch, model gak bedain lokasi). Beda paparan A (736) vs B (690) murni dari `M_road` per segmen — bukti bahwa diferensiasi spasial di rute pendek 100% berasal dari `roads_data.json`.
 
 Dosis absolut:
 
@@ -349,11 +367,11 @@ Beda paparan `(736 − 690) / 690 = 6,7%` → di bawah gate 20% → app tampilka
 
 ### Live mode (user pilih rute A, ternyata lebih lambat)
 
-| Segmen | Cᵢ | tᵢ terukur | Cᵢ × tᵢ |
-| --- | --- | --- | --- |
-| 1 | 47,4 | 12 | 569 |
-| 2 | 43,6 | 7 | 305 |
-| **Total** | | **19** | **874** |
+| Segmen    | Cᵢ   | tᵢ terukur | Cᵢ × tᵢ |
+| --------- | ---- | ---------- | ------- |
+| 1         | 47,4 | 12         | 569     |
+| 2         | 43,6 | 7          | 305     |
+| **Total** |      | **19**     | **874** |
 
 ```
 Dosis aktual = 0,040 × 874 = 35,0 µg
