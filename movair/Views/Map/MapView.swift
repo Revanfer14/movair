@@ -3,13 +3,13 @@ import MapKit
 import Combine
 
 struct MapView: View {
+
     @StateObject private var locationManager = LocationManager()
     @StateObject private var searchViewModel = MapSearchViewModel()
 
     @State private var isSearchPresented = false
     @State private var recenterTrigger = false
-    
-    @FocusState private var searchFieldFocused: Bool
+    @State private var searchSheetDetent: PresentationDetent = .large
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -23,7 +23,6 @@ struct MapView: View {
             VStack {
                 if !isSearchPresented {
                     searchBarOverlay
-
                 }
                 Spacer()
                 recenterButton
@@ -35,11 +34,13 @@ struct MapView: View {
         .onReceive(locationManager.$userLocation.compactMap { $0 }) { coordinate in
             searchViewModel.biasSearch(around: coordinate)
         }
-        .sheet(isPresented: $isSearchPresented) {
+        .sheet(isPresented: $isSearchPresented, onDismiss: {
+            searchSheetDetent = .large
+        }) {
             MapSearchSheet(viewModel: searchViewModel) {
                 isSearchPresented = false
             }
-            .presentationDetents([.large])
+            .presentationDetents([.large], selection: $searchSheetDetent)
             .presentationDragIndicator(.visible)
             .presentationCornerRadius(20)
             .presentationBackgroundInteraction(.enabled(upThrough: .medium))
@@ -48,12 +49,8 @@ struct MapView: View {
 
     private var searchBarOverlay: some View {
         MapSearchComponent(
-            text: .constant(""),
             placeholder: "Search for routes",
-            isFocused: $searchFieldFocused,
-            showsCloseButton: false,
-            isInteractive: false,
-            onBarTap: { isSearchPresented = true }
+            onTap: { isSearchPresented = true }
         )
         .padding(.horizontal)
         .padding(.top, 8)
