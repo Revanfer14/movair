@@ -47,10 +47,10 @@ struct RecentSearchList: View {
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "trash")
-                        .foregroundStyle(Color.Brand.danger)
+                        .foregroundStyle(Color.Brand.primaryRed)
 
                     Text("Delete")
-                        .foregroundStyle(Color.Brand.danger)
+                        .foregroundStyle(Color.Brand.primaryRed)
                 }
             }
             .tint(.clear)

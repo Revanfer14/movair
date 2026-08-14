@@ -20,9 +20,21 @@ extension Color {
         static let darkgray = Color(hex: "#76767D")
         static let black = Color(hex: "#000000")
         
-        static let danger = Color(hex: "#FF383C")
-        static let warning = Color(hex: "#FEBC2F")
-        static let success = Color(hex: "#34C759")
+        static let primaryMaroon = Color(hex: "#8A0002")
+        static let secondaryMaroon = Color(hex: "#FFE7E7")
+        
+        static let primaryRed = Color(hex: "#FF383C")
+        static let secondaryRed = Color(hex: "#FFECEC")
+        
+        static let primaryOrange = Color(hex: "#FF7800")
+        static let secondaryOrange = Color(hex: "#FFF3E9")
+        
+        static let primaryYellow = Color(hex: "#DD8C00")
+        static let secondaryYellow = Color(hex: "#FFF5CE")
+        
+        static let primaryGreen = Color(hex: "#34C759")
+        static let secondaryGreen = Color(hex: "#E6FFEC")
+        
     }
 }
 

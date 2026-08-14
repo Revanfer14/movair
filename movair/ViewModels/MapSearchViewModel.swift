@@ -9,6 +9,8 @@ final class MapSearchViewModel: ObservableObject {
         didSet { scheduleSearch() }
     }
 
+    @Published var selectedDestination: SelectedDestination?
+
     let dataStore: MapSearchDataStore
     let searchService: MapSearchService
 
@@ -24,7 +26,6 @@ final class MapSearchViewModel: ObservableObject {
         self.dataStore = dataStore ?? MapSearchDataStore()
         self.searchService = searchService ?? MapSearchService()
 
-        // Re-publish nested ObservableObjects' changes so SwiftUI updates.
         self.dataStore.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
@@ -44,12 +45,23 @@ final class MapSearchViewModel: ObservableObject {
     func selectRecent(_ recent: RecentSearch) {
         searchText = recent.title
         dataStore.add(recent.title)
+        // Resolve as destination with dummy coordinate near BSD if no map result
+        selectedDestination = SelectedDestination(
+            title: recent.title,
+            subtitle: "",
+            coordinate: CLLocationCoordinate2D(latitude: -6.3015, longitude: 106.6532)
+        )
     }
 
     func selectResult(_ result: SearchResult) {
         dataStore.add(result.title)
-        // TODO: forward the selected MKLocalSearchCompletion up to trigger
-        // route generation (e.g. via a delegate/closure passed into the view).
+        Task {
+            await resolveAndSelect(result)
+        }
+    }
+
+    func clearSelection() {
+        selectedDestination = nil
     }
 
     func deleteRecent(_ recent: RecentSearch) {
@@ -58,6 +70,33 @@ final class MapSearchViewModel: ObservableObject {
 
     func clearAllRecents() {
         dataStore.clearAll()
+    }
+
+    private func resolveAndSelect(_ result: SearchResult) async {
+        if let completion = result.completion {
+            let request = MKLocalSearch.Request(completion: completion)
+            let search = MKLocalSearch(request: request)
+            do {
+                let response = try await search.start()
+                if let item = response.mapItems.first, let coordinate = item.placemark.location?.coordinate {
+                    selectedDestination = SelectedDestination(
+                        title: result.title,
+                        subtitle: result.subtitle,
+                        coordinate: coordinate
+                    )
+                    return
+                }
+            } catch {
+                print("Resolve destination error: \(error.localizedDescription)")
+            }
+        }
+
+        // Fallback dummy coordinate (BXChange Mall / BSD area)
+        selectedDestination = SelectedDestination(
+            title: result.title,
+            subtitle: result.subtitle,
+            coordinate: CLLocationCoordinate2D(latitude: -6.3015, longitude: 106.6532)
+        )
     }
 
     private func scheduleSearch() {
