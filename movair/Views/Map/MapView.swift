@@ -60,7 +60,11 @@ struct MapView: View {
         HStack {
             Spacer()
             Button {
-                recenterTrigger = true
+                // Re-request / start updates if needed, then center
+                locationManager.requestPermission()
+                if locationManager.userLocation != nil {
+                    recenterTrigger = true
+                }
             } label: {
                 Image(systemName: "location.fill")
                     .foregroundStyle(Color.Brand.blue600)
