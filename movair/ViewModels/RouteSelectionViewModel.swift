@@ -4,18 +4,38 @@ import Combine
 
 @MainActor
 final class RouteSelectionViewModel: ObservableObject {
+    private struct ExposurePlaceholder {
+        let exposureRangeUg: ClosedRange<Int>
+        let exposureLevel: ExposureLevel
+        let pollutionDeltaPercent: Int
+    }
+
     @Published var originTitle: String = "Current location"
     @Published var destination: SelectedDestination?
     @Published var isRoundTrip: Bool = true
     @Published var routes: [RouteOption] = []
     @Published var selectedRouteID: UUID?
     @Published var isLoading: Bool = false
+    @Published var routeError: String?
 
     var selectedRoute: RouteOption? {
         routes.first { $0.id == selectedRouteID } ?? routes.first
     }
 
+    private let routingService: ORSRouting
+    private let debounceDelay: Duration = .milliseconds(300)
     private var originCoordinate: CLLocationCoordinate2D?
+    private var routeTask: Task<Void, Never>?
+
+    private static let exposurePlaceholders: [ExposurePlaceholder] = [
+        ExposurePlaceholder(exposureRangeUg: 130...145, exposureLevel: .moderate, pollutionDeltaPercent: -10),
+        ExposurePlaceholder(exposureRangeUg: 150...165, exposureLevel: .high, pollutionDeltaPercent: 10),
+        ExposurePlaceholder(exposureRangeUg: 170...185, exposureLevel: .high, pollutionDeltaPercent: 20)
+    ]
+
+    init(routingService: ORSRouting = ORSRoutingService()) {
+        self.routingService = routingService
+    }
 
     func configure(origin: CLLocationCoordinate2D?, destination: SelectedDestination) {
         originCoordinate = origin
@@ -33,7 +53,13 @@ final class RouteSelectionViewModel: ObservableObject {
         selectedRouteID = route.id
     }
 
+    func retry() {
+        regenerateRoutes()
+    }
+
     private func regenerateRoutes() {
+        routeTask?.cancel()
+
         guard let origin = originCoordinate, let destination else {
             routes = []
             selectedRouteID = nil
@@ -41,97 +67,50 @@ final class RouteSelectionViewModel: ObservableObject {
         }
 
         isLoading = true
-        // Dummy routes relative to origin → destination (BSD-area style loop)
-        let dest = destination.coordinate
-        let midLat = (origin.latitude + dest.latitude) / 2
-        let midLon = (origin.longitude + dest.longitude) / 2
+        routeError = nil
 
-        let cleanerCoords: [CLLocationCoordinate2D] = [
-            origin,
-            CLLocationCoordinate2D(latitude: midLat + 0.012, longitude: midLon - 0.008),
-            CLLocationCoordinate2D(latitude: midLat + 0.018, longitude: midLon + 0.004),
-            dest
-        ]
+        routeTask = Task { [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(for: self.debounceDelay)
+            guard !Task.isCancelled else { return }
 
-        let longerCoords: [CLLocationCoordinate2D] = [
-            origin,
-            CLLocationCoordinate2D(latitude: midLat - 0.006, longitude: midLon - 0.015),
-            CLLocationCoordinate2D(latitude: midLat + 0.004, longitude: midLon - 0.02),
-            CLLocationCoordinate2D(latitude: midLat + 0.014, longitude: midLon - 0.006),
-            dest
-        ]
+            do {
+                let fetchedRoutes = try await self.routingService.fetchRoutes(from: origin, to: destination.coordinate)
+                guard !Task.isCancelled else { return }
+                self.applyFetchedRoutes(fetchedRoutes)
+            } catch is CancellationError {
+                return
+            } catch {
+                guard !Task.isCancelled else { return }
+                self.routeError = (error as? ORSRoutingError)?.userMessage ?? ORSRoutingError.requestFailed(statusCode: 0).userMessage
+                self.routes = []
+                self.selectedRouteID = nil
+                self.isLoading = false
+            }
+        }
+    }
 
-        let balancedCoords: [CLLocationCoordinate2D] = [
-            origin,
-            CLLocationCoordinate2D(latitude: midLat + 0.004, longitude: midLon + 0.012),
-            CLLocationCoordinate2D(latitude: midLat + 0.01, longitude: midLon + 0.006),
-            dest
-        ]
+    private func applyFetchedRoutes(_ fetchedRoutes: [ORSRoute]) {
+        let sorted = fetchedRoutes.sorted { $0.durationSeconds < $1.durationSeconds }
+        let shortestDistance = sorted.map(\.distanceMeters).min() ?? 0
 
-        if isRoundTrip {
-            routes = [
-                RouteOption(
-                    title: "Cleaner Route",
-                    distanceKm: 42,
-                    durationMinutes: 170,
-                    exposureRangeUg: 150...160,
-                    exposureLevel: .high,
-                    pollutionDeltaPercent: -10,
-                    isRecommended: true,
-                    coordinates: makeRoundTrip(cleanerCoords)
-                ),
-                RouteOption(
-                    title: "Longer Route",
-                    distanceKm: 47,
-                    durationMinutes: 195,
-                    exposureRangeUg: 170...185,
-                    exposureLevel: .high,
-                    pollutionDeltaPercent: 20,
-                    isLonger: true,
-                    coordinates: makeRoundTrip(longerCoords)
-                ),
-                RouteOption(
-                    title: "Shorter Route",
-                    distanceKm: 35,
-                    durationMinutes: 140,
-                    exposureRangeUg: 130...145,
-                    exposureLevel: .moderate,
-                    pollutionDeltaPercent: 5,
-                    coordinates: makeRoundTrip(balancedCoords)
-                )
-            ]
-        } else {
-            routes = [
-                RouteOption(
-                    title: "Cleaner Route",
-                    distanceKm: 20,
-                    durationMinutes: 95,
-                    exposureRangeUg: 80...90,
-                    exposureLevel: .moderate,
-                    pollutionDeltaPercent: -10,
-                    isRecommended: true,
-                    coordinates: cleanerCoords
-                ),
-                RouteOption(
-                    title: "Longer Route",
-                    distanceKm: 23,
-                    durationMinutes: 110,
-                    exposureRangeUg: 100...115,
-                    exposureLevel: .moderate,
-                    pollutionDeltaPercent: 22,
-                    isLonger: true,
-                    coordinates: longerCoords
-                ),
-                RouteOption(
-                    title: "Shorter Route",
-                    distanceKm: 18,
-                    durationMinutes: 80,
-                    exposureRangeUg: 70...85,
-                    exposureLevel: .low,
-                    pollutionDeltaPercent: 0,
-                    coordinates: balancedCoords
-                )
-            ]
+        routes = sorted.enumerated().map { index, route in
+            let placeholder = Self.exposurePlaceholders[min(index, Self.exposurePlaceholders.count - 1)]
+            let tripDistanceMeters = isRoundTrip ? route.distanceMeters * 2 : route.distanceMeters
+            let tripDurationSeconds = isRoundTrip ? route.durationSeconds * 2 : route.durationSeconds
+            let coordinates = isRoundTrip ? makeRoundTrip(route.coordinates) : route.coordinates
+
+            return RouteOption(
+                title: "Route \(index + 1)",
+                distanceKm: tripDistanceMeters / 1000,
+                durationMinutes: Int((tripDurationSeconds / 60).rounded()),
+                exposureRangeUg: placeholder.exposureRangeUg,
+                exposureLevel: placeholder.exposureLevel,
+                pollutionDeltaPercent: placeholder.pollutionDeltaPercent,
+                isRecommended: index == 0,
+                isLonger: route.distanceMeters > shortestDistance,
+                coordinates: coordinates
+            )
         }
 
         selectedRouteID = routes.first(where: { $0.isRecommended })?.id ?? routes.first?.id
