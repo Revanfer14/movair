@@ -277,6 +277,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = movair/Info.plist;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Movair uses your heart rate, age, sex, and height to estimate how much air you breathe during a ride, for more accurate pollution exposure calculations.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Movair uses your location to determine your current position.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -315,6 +316,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = movair/Info.plist;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Movair uses your heart rate, age, sex, and height to estimate how much air you breathe during a ride, for more accurate pollution exposure calculations.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Movair uses your location to determine your current position.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
