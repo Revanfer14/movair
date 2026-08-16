@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct RouteOptionCard: View {
+struct MapRouteOptionCard: View {
     let route: RouteOption
     let isSelected: Bool
 
@@ -25,10 +25,10 @@ struct RouteOptionCard: View {
         .padding(16)
         .padding(.top, route.isRecommended ? 4 : 0)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(Color.Brand.blue900.opacity(0.55), lineWidth: 1.5)
+                .strokeBorder(Color.Brand.blue900, lineWidth: 2)
         }
         .overlay(alignment: .topTrailing) {
             if route.isRecommended {
@@ -68,7 +68,7 @@ struct RouteOptionCard: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 3)
     }
 
@@ -180,7 +180,7 @@ struct RouteOptionCard: View {
     ZStack {
         Color.gray.opacity(0.35).ignoresSafeArea()
         VStack(spacing: 12) {
-            RouteOptionCard(
+            MapRouteOptionCard(
                 route: RouteOption(
                     title: "Cleaner Route",
                     distanceKm: 42,
@@ -193,7 +193,7 @@ struct RouteOptionCard: View {
                 ),
                 isSelected: true
             )
-            RouteOptionCard(
+            MapRouteOptionCard(
                 route: RouteOption(
                     title: "Longer Route",
                     distanceKm: 47,

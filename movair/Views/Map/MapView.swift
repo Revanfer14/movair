@@ -7,15 +7,20 @@ struct MapView: View {
     @StateObject private var locationManager = LocationManager()
     @StateObject private var searchViewModel = MapSearchViewModel()
     @StateObject private var routeSelectionViewModel = RouteSelectionViewModel()
-    @StateObject private var activeNavigationViewModel = ActiveNavigationViewModel()
+    @StateObject private var activeNavigationViewModel = MapNavigationViewModel()
+    @ObservedObject private var tripStore = TripHistoryStore.shared
 
     @State private var phase: NavigationPhase = .browsing
     @State private var isSearchPresented = false
     @State private var recenterTrigger = false
     @State private var searchSheetDetent: PresentationDetent = .large
+    @State private var completedTrip: TripSummary?
 
     private var isRouteFlowPresented: Bool {
-        phase == .routeSelection || phase == .navigating || phase == .paused
+        phase == .routeSelection
+            || phase == .navigating
+            || phase == .paused
+            || phase == .tripSummary
     }
 
     var body: some View {
@@ -41,6 +46,7 @@ struct MapView: View {
                 set: { presented in
                     if !presented {
                         searchViewModel.clearSelection()
+                        completedTrip = nil
                         phase = .browsing
                     }
                 }
@@ -57,7 +63,13 @@ struct MapView: View {
                 viewModel: routeSelectionViewModel,
                 locationManager: locationManager,
                 onStart: { route in
-                    activeNavigationViewModel.configure(with: route)
+                    let origin = routeSelectionViewModel.originTitle
+                    let destination = routeSelectionViewModel.destination?.title ?? "Destination"
+                    activeNavigationViewModel.configure(
+                        with: route,
+                        originTitle: origin,
+                        destinationTitle: destination
+                    )
                     phase = .navigating
                 },
                 onClose: {
@@ -73,13 +85,27 @@ struct MapView: View {
                 onPause: { phase = .paused },
                 onResume: { phase = .navigating },
                 onFinish: {
-                    searchViewModel.clearSelection()
-                    phase = .browsing
+                    let trip = activeNavigationViewModel.makeTripSummary(completedAt: Date())
+                    tripStore.add(trip)
+                    completedTrip = trip
+                    phase = .tripSummary
                 },
                 onBack: {
                     phase = .routeSelection
                 }
             )
+        case .tripSummary:
+            if let trip = completedTrip {
+                TripSummaryView(trip: trip) {
+                    searchViewModel.clearSelection()
+                    completedTrip = nil
+                    phase = .browsing
+                }
+            } else {
+                Color.clear.onAppear {
+                    phase = .browsing
+                }
+            }
         case .browsing:
             EmptyView()
         }

@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct RoundTripToggle: View {
+struct MapRoundTripToggle: View {
     @Binding var isOn: Bool
 
     var body: some View {
@@ -27,5 +27,5 @@ struct RoundTripToggle: View {
 }
 
 #Preview {
-    RoundTripToggle(isOn: .constant(true))
+    MapRoundTripToggle(isOn: .constant(true))
 }

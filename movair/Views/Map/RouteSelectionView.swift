@@ -32,7 +32,7 @@ struct RouteSelectionView: View {
 
                     HStack {
                         Spacer()
-                        RoundTripToggle(
+                        MapRoundTripToggle(
                             isOn: Binding(
                                 get: { viewModel.isRoundTrip },
                                 set: { viewModel.setRoundTrip($0) }
@@ -46,8 +46,8 @@ struct RouteSelectionView: View {
         }
         .sheet(isPresented: .constant(true)) {
             routeSheet
-                .presentationDetents([.medium], selection: $sheetDetent)
-                .presentationDragIndicator(.visible)
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.hidden)
                 .presentationCornerRadius(22)
                 .presentationBackgroundInteraction(.enabled(upThrough: .medium))
                 .interactiveDismissDisabled(true)
@@ -75,7 +75,7 @@ struct RouteSelectionView: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Close")
 
-            RouteEndpointBar(
+            MapRouteEndpointBar(
                 originTitle: viewModel.originTitle,
                 destinationTitle: viewModel.destination?.title ?? "Destination"
             )
@@ -100,8 +100,7 @@ struct RouteSelectionView: View {
 
     private var routeSheet: some View {
         VStack(spacing: 0) {
-            // Space below grabber
-            Color.clear.frame(height: 12)
+            Color.clear.frame(height: 16)
 
             ZStack(alignment: .bottom) {
                 if let routeError = viewModel.routeError {
@@ -129,43 +128,34 @@ struct RouteSelectionView: View {
                     }
                 }
 
-                // Glass fade + Start button pinned at bottom
                 VStack(spacing: 0) {
-                    LinearGradient(
-                        colors: [
-                            Color.clear,
-                            Color.black.opacity(0.001)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .frame(height: 28)
-                    .background {
-                        Rectangle()
-                            .fill(.ultraThinMaterial)
-                            .mask(
-                                LinearGradient(
-                                    colors: [.clear, .black],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
+                    Rectangle()
+                        .fill(.ultraThinMaterial)
+                        .mask(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .clear, location: 0.0),
+                                    .init(color: .white.opacity(0.6), location: 0.25),
+                                    .init(color: .white, location: 0.5)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
                             )
-                    }
+                        )
 
-                    VStack(spacing: 0) {
-                        PrimaryButton(
-                            title: "Start",
-                            systemImage: "location.north.fill"
-                        ) {
-                            if let route = viewModel.selectedRoute {
-                                onStart(route)
-                            }
+                    PrimaryButton(
+                        title: "Start",
+                        systemImage: "location.north.fill"
+                    ) {
+                        if let route = viewModel.selectedRoute {
+                            onStart(route)
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 12)
                     }
-                    .background(.ultraThinMaterial)
+                    .padding(.horizontal, 16)
+                    .padding(.top, -40)
+                    .padding(.bottom, 12)
                 }
+                .frame(height: 130)
             }
         }
     }

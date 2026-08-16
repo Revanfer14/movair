@@ -3,7 +3,7 @@ import CoreLocation
 import Combine
 
 @MainActor
-final class ActiveNavigationViewModel: ObservableObject {
+final class MapNavigationViewModel: ObservableObject {
     struct Instruction: Identifiable, Equatable {
         let id = UUID()
         let distanceKm: Double
@@ -18,13 +18,23 @@ final class ActiveNavigationViewModel: ObservableObject {
     @Published var accumulatedExposureUg: Int = 0
     @Published var exposureLevel: ExposureLevel = .low
     @Published var routeCoordinates: [CLLocationCoordinate2D] = []
+    @Published var originTitle: String = "Current location"
+    @Published var destinationTitle: String = "Destination"
+    @Published var startedAt: Date = Date()
 
     var currentInstruction: Instruction? {
         guard instructions.indices.contains(currentInstructionIndex) else { return nil }
         return instructions[currentInstructionIndex]
     }
 
-    func configure(with route: RouteOption) {
+    func configure(
+        with route: RouteOption,
+        originTitle: String = "Current location",
+        destinationTitle: String = "Destination"
+    ) {
+        self.originTitle = originTitle
+        self.destinationTitle = destinationTitle
+        startedAt = Date()
         routeCoordinates = route.coordinates
         distanceKm = route.distanceKm
         durationMinutes = route.durationMinutes
@@ -38,9 +48,23 @@ final class ActiveNavigationViewModel: ObservableObject {
         instructions = [
             Instruction(distanceKm: 3, text: "Turn left onto Jalan Damai Foresta"),
             Instruction(distanceKm: 1.2, text: "Continue straight on Boulevard Utara"),
-            Instruction(distanceKm: 0.8, text: "Keep right toward BXChange Mall")
+            Instruction(distanceKm: 0.8, text: "Keep right toward \(destinationTitle)")
         ]
         currentInstructionIndex = 0
+    }
+
+    func makeTripSummary(completedAt: Date = Date()) -> TripSummary {
+        TripSummary(
+            originTitle: originTitle,
+            destinationTitle: destinationTitle,
+            distanceKm: distanceKm,
+            durationMinutes: durationMinutes,
+            averageSpeedKmh: averageSpeedKmh,
+            exposureUg: accumulatedExposureUg,
+            exposureLevel: exposureLevel,
+            coordinates: routeCoordinates,
+            completedAt: completedAt
+        )
     }
 
     func goToPreviousInstruction() {

@@ -2,7 +2,7 @@ import SwiftUI
 import MapKit
 
 struct ActiveNavigationView: View {
-    @ObservedObject var viewModel: ActiveNavigationViewModel
+    @ObservedObject var viewModel: MapNavigationViewModel
     @ObservedObject var locationManager: LocationManager
 
     let isPaused: Bool
@@ -25,9 +25,9 @@ struct ActiveNavigationView: View {
             )
             .ignoresSafeArea()
 
-            VStack {
+            VStack(spacing: 0) {
                 if let instruction = viewModel.currentInstruction {
-                    NavigationInstructionBanner(
+                    MapNavigationBanner(
                         distanceKm: instruction.distanceKm,
                         instruction: instruction.text,
                         pageCount: viewModel.instructions.count,
@@ -42,7 +42,7 @@ struct ActiveNavigationView: View {
 
                 mapControls
 
-                NavigationStatsPanel(
+                MapNavigationStats(
                     mode: isPaused ? .paused : .active,
                     distanceKm: viewModel.distanceKm,
                     durationMinutes: viewModel.durationMinutes,
@@ -70,7 +70,7 @@ struct ActiveNavigationView: View {
                 }
             }
             .padding(.trailing, 16)
-            .padding(.bottom, 8)
+            .padding(.bottom, 10)
         }
     }
 
@@ -88,7 +88,7 @@ struct ActiveNavigationView: View {
 }
 
 #Preview {
-    let vm = ActiveNavigationViewModel()
+    let vm = MapNavigationViewModel()
     vm.configure(
         with: RouteOption(
             title: "Cleaner Route",
@@ -102,7 +102,9 @@ struct ActiveNavigationView: View {
                 CLLocationCoordinate2D(latitude: -6.29, longitude: 106.64),
                 CLLocationCoordinate2D(latitude: -6.30, longitude: 106.65)
             ]
-        )
+        ),
+        originTitle: "Current location",
+        destinationTitle: "BXChange Mall"
     )
     return ActiveNavigationView(
         viewModel: vm,
