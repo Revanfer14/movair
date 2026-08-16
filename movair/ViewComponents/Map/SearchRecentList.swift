@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct RecentSearchList: View {
+struct SearchRecentList: View {
     let recents: [RecentSearch]
     var onSelect: (RecentSearch) -> Void
     var onDelete: (RecentSearch) -> Void
@@ -66,7 +66,7 @@ struct RecentSearchList: View {
 }
 
 #Preview {
-    RecentSearchList(
+    SearchRecentList(
         recents: [
             RecentSearch(title: "AEON Mall BSD City"),
             RecentSearch(title: "The Breeze")

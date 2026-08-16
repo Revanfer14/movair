@@ -3,7 +3,7 @@ import SwiftUI
 struct PrimaryButton: View {
     enum Style {
         case filled
-        case outlined
+        case unfilled
     }
 
     let title: String
@@ -26,12 +26,6 @@ struct PrimaryButton: View {
             .padding(.vertical, 14)
             .foregroundStyle(foregroundColor)
             .background(backgroundColor, in: Capsule())
-            .overlay {
-                if style == .outlined {
-                    Capsule()
-                        .strokeBorder(Color.Brand.blue700, lineWidth: 1.5)
-                }
-            }
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
@@ -42,14 +36,14 @@ struct PrimaryButton: View {
     private var foregroundColor: Color {
         switch style {
         case .filled: return Color.Brand.white
-        case .outlined: return Color.Brand.blue900
+        case .unfilled: return Color.Brand.labelPrimary
         }
     }
 
     private var backgroundColor: Color {
         switch style {
         case .filled: return Color.Brand.blue900
-        case .outlined: return Color.white.opacity(0.8)
+        case .unfilled: return Color(.secondarySystemGroupedBackground)
         }
     }
 }
@@ -58,7 +52,7 @@ struct PrimaryButton: View {
     VStack(spacing: 12) {
         PrimaryButton(title: "Start", systemImage: "location.north.fill") {}
         PrimaryButton(title: "Pause") {}
-        PrimaryButton(title: "Finish", style: .outlined) {}
+        PrimaryButton(title: "Finish", style: .unfilled) {}
         PrimaryButton(title: "Resume") {}
     }
     .padding()

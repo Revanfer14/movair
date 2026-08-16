@@ -5,9 +5,9 @@ struct AppTabView: View {
         case map
         case history
     }
- 
+
     @State private var selectedTab: Tab = .map
- 
+
     var body: some View {
         TabView(selection: $selectedTab) {
             MapView()
@@ -15,10 +15,10 @@ struct AppTabView: View {
                     Label("Map", systemImage: "map.fill")
                 }
                 .tag(Tab.map)
- 
+
             HistoryView()
                 .tabItem {
-                    Label("History", systemImage: "clock.fill")
+                    Label("History", systemImage: "clock")
                 }
                 .tag(Tab.history)
         }

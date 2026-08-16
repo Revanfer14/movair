@@ -2,25 +2,31 @@ import SwiftUI
 
 struct ExposureBadge: View {
     let level: ExposureLevel
+    
     var showsAqi: Bool = true
+    var badgeSize: String = "small"
 
     var body: some View {
         HStack(spacing: 4) {
             if showsAqi {
                 Image(systemName: badgeIcon)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: badgeSize == "small" ? 12 : 24, weight: .semibold))
             } else {
                 Circle()
                     .fill(dotColor)
                     .frame(width: 6, height: 6)
             }
+            
             Text(level.title)
-                .font(Font.Brand.footnote)
+                .font(badgeSize == "small" ? Font.Brand.footnote : Font.Brand.title2Bold)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
         }
         .foregroundStyle(textColor)
-        .padding(.horizontal, 10)
-        .padding(.vertical, showsAqi ? 6 : 3)
+        .padding(.horizontal, 12)
+        .padding(.vertical, showsAqi ? 8 : 4)
         .background(backgroundColor, in: Capsule())
+        .fixedSize(horizontal: true, vertical: true)
         .accessibilityLabel("Exposure \(level.title)")
     }
     
@@ -70,7 +76,7 @@ struct ExposureBadge: View {
         ExposureBadge(level: .low)
         ExposureBadge(level: .moderate, showsAqi: true)
         ExposureBadge(level: .high, showsAqi: false)
-        ExposureBadge(level: .veryHigh, showsAqi: false)
-        ExposureBadge(level: .extreme, showsAqi: true)
+        ExposureBadge(level: .veryHigh, showsAqi: true, badgeSize: "big")
+        ExposureBadge(level: .extreme, showsAqi: true, badgeSize: "big")
     }
 }

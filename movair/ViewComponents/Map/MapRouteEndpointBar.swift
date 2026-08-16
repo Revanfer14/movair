@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct RouteEndpointBar: View {
+struct MapRouteEndpointBar: View {
     let originTitle: String
     let destinationTitle: String
     var onSwap: (() -> Void)? = nil
@@ -58,7 +58,7 @@ struct RouteEndpointBar: View {
 }
 
 #Preview {
-    RouteEndpointBar(
+    MapRouteEndpointBar(
         originTitle: "Current location",
         destinationTitle: "BXChange Mall"
     )

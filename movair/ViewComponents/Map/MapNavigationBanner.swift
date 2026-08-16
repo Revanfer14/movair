@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct NavigationInstructionBanner: View {
+struct MapNavigationBanner: View {
     let distanceKm: Double
     let instruction: String
     let pageCount: Int
@@ -14,20 +14,20 @@ struct NavigationInstructionBanner: View {
             } label: {
                 Image(systemName: "arrow.turn.up.left")
                     .font(Font.Brand.largeTitle)
-                    .foregroundStyle(Color.Brand.blue900)
+                    .foregroundStyle(Color.Brand.labelPrimary)
                     .frame(width: 72, height: 72)
-                    .background(Color.Brand.blue900.opacity(0.2), in: Circle())
+                    .background(Color.Brand.labelPrimary.opacity(0.2), in: Circle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Back")
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(String(format: "%.0f km", distanceKm))
-                    .font(Font.Brand.bodyBold)
+                    .font(Font.Brand.title2Bold)
                     .foregroundStyle(Color.primary)
 
                 Text(instruction)
-                    .font(Font.Brand.body)
+                    .font(Font.Brand.title2)
                     .foregroundStyle(Color.primary)
                     .lineLimit(2)
 
@@ -35,11 +35,11 @@ struct NavigationInstructionBanner: View {
                     HStack(spacing: 4) {
                         ForEach(0..<pageCount, id: \.self) { index in
                             Circle()
-                                .fill(index == currentPage ? Color.Brand.blue600 : Color.Brand.gray)
-                                .frame(width: 5, height: 5)
+                                .fill(index == currentPage ? Color.Brand.labelPrimary : Color.Brand.labelPrimary.opacity(0.2))
+                                .frame(width: 8, height: 8)
                         }
                     }
-                    .padding(.top, 2)
+                    .padding(.top, 10)
                 }
             }
 
@@ -53,7 +53,7 @@ struct NavigationInstructionBanner: View {
 }
 
 #Preview {
-    NavigationInstructionBanner(
+    MapNavigationBanner(
         distanceKm: 3,
         instruction: "Turn left onto Jalan Damai Foresta",
         pageCount: 3,

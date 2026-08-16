@@ -72,7 +72,7 @@ struct MapSearchSheet: View {
     @ViewBuilder
     private var resultsSection: some View {
         if viewModel.searchText.isEmpty {
-            RecentSearchList(
+            SearchRecentList(
                 recents: viewModel.recents,
                 onSelect: { viewModel.selectRecent($0) },
                 onDelete: { viewModel.deleteRecent($0) }
