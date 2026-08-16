@@ -83,27 +83,49 @@ struct RouteSelectionView: View {
         .padding(.horizontal, 16)
     }
 
+    private func routeErrorState(message: String) -> some View {
+        VStack(spacing: 12) {
+            Text(message)
+                .font(Font.Brand.body)
+                .foregroundStyle(Color.Brand.darkgray)
+                .multilineTextAlignment(.center)
+
+            PrimaryButton(title: "Retry", style: .outlined) {
+                viewModel.retry()
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
+    }
+
     private var routeSheet: some View {
         VStack(spacing: 0) {
             Color.clear.frame(height: 16)
 
             ZStack(alignment: .bottom) {
-                ScrollView(.vertical, showsIndicators: false) {
-                    LazyVStack(spacing: 12) {
-                        ForEach(viewModel.routes) { route in
-                            MapRouteOptionCard(
-                                route: route,
-                                isSelected: route.id == viewModel.selectedRouteID
-                            )
-                            .onTapGesture {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    viewModel.selectRoute(route)
+                if let routeError = viewModel.routeError {
+                    routeErrorState(message: routeError)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 88)
+                } else {
+                    ScrollView(.vertical, showsIndicators: false) {
+                        LazyVStack(spacing: 12) {
+                            ForEach(viewModel.routes) { route in
+                                RouteOptionCard(
+                                    route: route,
+                                    isSelected: route.id == viewModel.selectedRouteID
+                                )
+                                .onTapGesture {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        viewModel.selectRoute(route)
+                                    }
                                 }
                             }
                         }
+                        .padding(.horizontal, 16)
+                        // Extra bottom inset so last cards can scroll above Start + glass fade
+                        .padding(.bottom, 88)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 130)
                 }
 
                 VStack(spacing: 0) {
@@ -139,8 +161,32 @@ struct RouteSelectionView: View {
     }
 }
 
+private struct PreviewORSRoutingService: ORSRouting {
+    func fetchRoutes(from origin: CLLocationCoordinate2D, to destination: CLLocationCoordinate2D) async throws -> [ORSRoute] {
+        let midLat = (origin.latitude + destination.latitude) / 2
+        let midLon = (origin.longitude + destination.longitude) / 2
+        return [
+            ORSRoute(
+                coordinates: [origin, CLLocationCoordinate2D(latitude: midLat + 0.01, longitude: midLon), destination],
+                distanceMeters: 20_000,
+                durationSeconds: 5_400
+            ),
+            ORSRoute(
+                coordinates: [origin, CLLocationCoordinate2D(latitude: midLat - 0.01, longitude: midLon - 0.01), destination],
+                distanceMeters: 23_000,
+                durationSeconds: 6_300
+            ),
+            ORSRoute(
+                coordinates: [origin, CLLocationCoordinate2D(latitude: midLat + 0.005, longitude: midLon + 0.01), destination],
+                distanceMeters: 18_000,
+                durationSeconds: 4_800
+            )
+        ]
+    }
+}
+
 #Preview {
-    let vm = RouteSelectionViewModel()
+    let vm = RouteSelectionViewModel(routingService: PreviewORSRoutingService())
     let dest = SelectedDestination(
         title: "BXChange Mall",
         subtitle: "BSD",
