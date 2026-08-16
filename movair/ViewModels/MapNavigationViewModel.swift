@@ -5,9 +5,22 @@ import Combine
 @MainActor
 final class MapNavigationViewModel: ObservableObject {
     struct Instruction: Identifiable, Equatable {
-        let id = UUID()
+        let id: UUID
         let distanceKm: Double
         let text: String
+        let systemImage: String
+
+        init(
+            id: UUID = UUID(),
+            distanceKm: Double,
+            text: String,
+            systemImage: String
+        ) {
+            self.id = id
+            self.distanceKm = distanceKm
+            self.text = text
+            self.systemImage = systemImage
+        }
     }
 
     @Published var instructions: [Instruction] = []
@@ -46,9 +59,21 @@ final class MapNavigationViewModel: ObservableObject {
         exposureLevel = route.exposureLevel
 
         instructions = [
-            Instruction(distanceKm: 3, text: "Turn left onto Jalan Damai Foresta"),
-            Instruction(distanceKm: 1.2, text: "Continue straight on Boulevard Utara"),
-            Instruction(distanceKm: 0.8, text: "Keep right toward \(destinationTitle)")
+            Instruction(
+                distanceKm: 3,
+                text: "Turn left onto Jalan Damai Foresta",
+                systemImage: "arrow.turn.up.left"
+            ),
+            Instruction(
+                distanceKm: 1.2,
+                text: "Continue straight on Boulevard Utara",
+                systemImage: "arrow.up"
+            ),
+            Instruction(
+                distanceKm: 0.8,
+                text: "Keep right toward \(destinationTitle)",
+                systemImage: "arrow.turn.up.right"
+            )
         ]
         currentInstructionIndex = 0
     }
@@ -75,5 +100,10 @@ final class MapNavigationViewModel: ObservableObject {
     func goToNextInstruction() {
         guard currentInstructionIndex < instructions.count - 1 else { return }
         currentInstructionIndex += 1
+    }
+
+    func setInstructionIndex(_ index: Int) {
+        guard instructions.indices.contains(index) else { return }
+        currentInstructionIndex = index
     }
 }

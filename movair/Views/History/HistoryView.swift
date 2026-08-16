@@ -40,14 +40,17 @@ struct HistoryView: View {
     }
 
     private var header: some View {
-        ZStack(alignment: .topTrailing) {
+        ZStack(alignment: .bottomTrailing) {
             Color.Brand.blue900
 
-            Image(systemName: "bicycle")
-                .font(.system(size: 72, weight: .ultraLight))
-                .foregroundStyle(Color.Brand.white.opacity(0.25))
-                .padding(.trailing, 20)
-                .padding(.top, 48)
+            Image("HistoryHeaderBanner")
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: 220)
+                .padding(.trailing, -20)
+                .padding(.bottom, 28)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Your")

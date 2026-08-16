@@ -44,17 +44,12 @@ final class MapSearchViewModel: ObservableObject {
 
     func selectRecent(_ recent: RecentSearch) {
         searchText = recent.title
-        dataStore.add(recent.title)
-        // Resolve as destination with dummy coordinate near BSD if no map result
-        selectedDestination = SelectedDestination(
-            title: recent.title,
-            subtitle: "",
-            coordinate: CLLocationCoordinate2D(latitude: -6.3015, longitude: 106.6532)
-        )
+        Task {
+            await resolveRecentAndSelect(recent)
+        }
     }
 
     func selectResult(_ result: SearchResult) {
-        dataStore.add(result.title)
         Task {
             await resolveAndSelect(result)
         }
@@ -72,13 +67,39 @@ final class MapSearchViewModel: ObservableObject {
         dataStore.clearAll()
     }
 
+    private func resolveRecentAndSelect(_ recent: RecentSearch) async {
+        if let coordinate = recent.coordinate {
+            dataStore.add(recent.title, subtitle: recent.subtitle, coordinate: coordinate)
+            selectedDestination = SelectedDestination(
+                title: recent.title,
+                subtitle: recent.subtitle,
+                coordinate: coordinate
+            )
+            return
+        }
+
+        if let coordinate = await geocode(query: recent.title) {
+            dataStore.add(recent.title, subtitle: recent.subtitle, coordinate: coordinate)
+            selectedDestination = SelectedDestination(
+                title: recent.title,
+                subtitle: recent.subtitle,
+                coordinate: coordinate
+            )
+            return
+        }
+
+        print("Could not resolve coordinate for recent: \(recent.title)")
+    }
+
     private func resolveAndSelect(_ result: SearchResult) async {
         if let completion = result.completion {
             let request = MKLocalSearch.Request(completion: completion)
             let search = MKLocalSearch(request: request)
             do {
                 let response = try await search.start()
-                if let item = response.mapItems.first, let coordinate = item.placemark.location?.coordinate {
+                if let item = response.mapItems.first,
+                   let coordinate = item.placemark.location?.coordinate {
+                    dataStore.add(result.title, subtitle: result.subtitle, coordinate: coordinate)
                     selectedDestination = SelectedDestination(
                         title: result.title,
                         subtitle: result.subtitle,
@@ -91,12 +112,34 @@ final class MapSearchViewModel: ObservableObject {
             }
         }
 
-        // Fallback dummy coordinate (BXChange Mall / BSD area)
-        selectedDestination = SelectedDestination(
-            title: result.title,
-            subtitle: result.subtitle,
-            coordinate: CLLocationCoordinate2D(latitude: -6.3015, longitude: 106.6532)
-        )
+        if let coordinate = await geocode(query: result.title) {
+            dataStore.add(result.title, subtitle: result.subtitle, coordinate: coordinate)
+            selectedDestination = SelectedDestination(
+                title: result.title,
+                subtitle: result.subtitle,
+                coordinate: coordinate
+            )
+            return
+        }
+
+        print("Could not resolve coordinate for result: \(result.title)")
+    }
+
+    private func geocode(query: String) async -> CLLocationCoordinate2D? {
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = query
+        request.resultTypes = [.pointOfInterest, .address]
+        if let region = searchService.currentRegion {
+            request.region = region
+        }
+        let search = MKLocalSearch(request: request)
+        do {
+            let response = try await search.start()
+            return response.mapItems.first?.placemark.location?.coordinate
+        } catch {
+            print("Geocode error: \(error.localizedDescription)")
+            return nil
+        }
     }
 
     private func scheduleSearch() {

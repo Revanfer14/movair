@@ -5,6 +5,7 @@ final class MapSearchService: NSObject, ObservableObject {
     @Published var results: [SearchResult] = []
 
     private let completer = MKLocalSearchCompleter()
+    private(set) var currentRegion: MKCoordinateRegion?
 
     override init() {
         super.init()
@@ -13,6 +14,7 @@ final class MapSearchService: NSObject, ObservableObject {
     }
 
     func setRegion(_ region: MKCoordinateRegion) {
+        currentRegion = region
         completer.region = region
     }
 
@@ -32,7 +34,6 @@ extension MapSearchService: MKLocalSearchCompleterDelegate {
     }
 
     func completer(_ completer: MKLocalSearchCompleter, didFailWithError error: Error) {
-        // DUMMY: surface a user-visible error state in production instead of just logging.
         print("SearchCompleterService error: \(error.localizedDescription)")
         results = []
     }

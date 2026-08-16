@@ -9,7 +9,7 @@ struct ActiveNavigationView: View {
     var onPause: () -> Void
     var onResume: () -> Void
     var onFinish: () -> Void
-    var onBack: () -> Void
+    var onBack: (() -> Void)? = nil
 
     @State private var recenterTrigger = false
 
@@ -26,13 +26,13 @@ struct ActiveNavigationView: View {
             .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                if let instruction = viewModel.currentInstruction {
+                if !viewModel.instructions.isEmpty {
                     MapNavigationBanner(
-                        distanceKm: instruction.distanceKm,
-                        instruction: instruction.text,
-                        pageCount: viewModel.instructions.count,
-                        currentPage: viewModel.currentInstructionIndex,
-                        onBack: onBack
+                        instructions: viewModel.instructions,
+                        currentIndex: Binding(
+                            get: { viewModel.currentInstructionIndex },
+                            set: { viewModel.setInstructionIndex($0) }
+                        )
                     )
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
@@ -112,7 +112,6 @@ struct ActiveNavigationView: View {
         isPaused: false,
         onPause: {},
         onResume: {},
-        onFinish: {},
-        onBack: {}
+        onFinish: {}
     )
 }

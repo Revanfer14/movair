@@ -17,6 +17,7 @@ final class RouteSelectionViewModel: ObservableObject {
     @Published var selectedRouteID: UUID?
     @Published var isLoading: Bool = false
     @Published var routeError: String?
+    @Published private(set) var originIsCurrentLocation: Bool = true
 
     var selectedRoute: RouteOption? {
         routes.first { $0.id == selectedRouteID } ?? routes.first
@@ -25,6 +26,7 @@ final class RouteSelectionViewModel: ObservableObject {
     private let routingService: ORSRouting
     private let debounceDelay: Duration = .milliseconds(300)
     private var originCoordinate: CLLocationCoordinate2D?
+    private var userLocationCoordinate: CLLocationCoordinate2D?
     private var routeTask: Task<Void, Never>?
 
     private static let exposurePlaceholders: [ExposurePlaceholder] = [
@@ -39,8 +41,18 @@ final class RouteSelectionViewModel: ObservableObject {
 
     func configure(origin: CLLocationCoordinate2D?, destination: SelectedDestination) {
         originCoordinate = origin
+        userLocationCoordinate = origin
         self.destination = destination
+        originTitle = "Current location"
+        originIsCurrentLocation = true
         regenerateRoutes()
+    }
+
+    func updateUserLocation(_ coordinate: CLLocationCoordinate2D?) {
+        userLocationCoordinate = coordinate
+        if originIsCurrentLocation, let coordinate {
+            originCoordinate = coordinate
+        }
     }
 
     func setRoundTrip(_ value: Bool) {
@@ -54,6 +66,51 @@ final class RouteSelectionViewModel: ObservableObject {
     }
 
     func retry() {
+        regenerateRoutes()
+    }
+
+    /// Replace origin with a searched place and re-route.
+    func updateOrigin(to place: SelectedDestination) {
+        originTitle = place.title
+        originCoordinate = place.coordinate
+        originIsCurrentLocation = false
+        regenerateRoutes()
+    }
+
+    /// Reset origin to current GPS location and re-route.
+    func updateOriginToCurrentLocation() {
+        guard let coordinate = userLocationCoordinate ?? originCoordinate else { return }
+        originTitle = "Current location"
+        originCoordinate = coordinate
+        originIsCurrentLocation = true
+        regenerateRoutes()
+    }
+
+    /// Replace destination with a searched place and re-route.
+    func updateDestination(to place: SelectedDestination) {
+        destination = place
+        regenerateRoutes()
+    }
+
+    /// Swap origin ↔ destination titles and coordinates, then rebuild routes.
+    func swapEndpoints() {
+        guard let destination, let originCoordinate else { return }
+
+        let previousOriginTitle = originTitle
+        let previousOriginCoordinate = originCoordinate
+        let previousWasCurrent = originIsCurrentLocation
+        let previousDestination = destination
+
+        originTitle = previousDestination.title
+        self.originCoordinate = previousDestination.coordinate
+        originIsCurrentLocation = false
+
+        self.destination = SelectedDestination(
+            title: previousOriginTitle,
+            subtitle: previousWasCurrent ? "Current location" : "",
+            coordinate: previousOriginCoordinate
+        )
+
         regenerateRoutes()
     }
 
