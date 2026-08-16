@@ -68,7 +68,9 @@ struct MapView: View {
                     activeNavigationViewModel.configure(
                         with: route,
                         originTitle: origin,
-                        destinationTitle: destination
+                        destinationTitle: destination,
+                        originCoordinate: routeSelectionViewModel.currentOriginCoordinate,
+                        destinationCoordinate: routeSelectionViewModel.destination?.coordinate
                     )
                     phase = .navigating
                 },
@@ -162,7 +164,7 @@ struct MapView: View {
                 Image(systemName: "location.fill")
                     .foregroundStyle(Color.Brand.blue600)
                     .padding(10)
-                    .background(Color(.secondarySystemBackground), in: Circle())
+                    .background(.ultraThinMaterial, in: Circle())
                     .shadow(color: .black.opacity(0.12), radius: 6, x: 0, y: 2)
             }
             .accessibilityLabel("Center on my location")

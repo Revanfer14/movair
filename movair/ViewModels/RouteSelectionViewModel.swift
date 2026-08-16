@@ -19,6 +19,8 @@ final class RouteSelectionViewModel: ObservableObject {
     @Published var routeError: String?
     @Published private(set) var originIsCurrentLocation: Bool = true
 
+    var currentOriginCoordinate: CLLocationCoordinate2D? { originCoordinate }
+
     var selectedRoute: RouteOption? {
         routes.first { $0.id == selectedRouteID } ?? routes.first
     }

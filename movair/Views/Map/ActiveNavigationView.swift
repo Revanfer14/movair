@@ -20,8 +20,11 @@ struct ActiveNavigationView: View {
                 centerCoordinate: locationManager.userLocation,
                 showsUserLocation: true,
                 routeCoordinates: viewModel.routeCoordinates,
-                destinationCoordinate: viewModel.routeCoordinates.last,
-                fitsRouteInView: true
+                originCoordinate: viewModel.originCoordinate,
+                destinationCoordinate: viewModel.destinationCoordinate,
+                fitsRouteInView: true,
+                routeEdgePadding: UIEdgeInsets(top: 120, left: 40, bottom: 280, right: 40),
+                showsOriginMarker: true
             )
             .ignoresSafeArea()
 

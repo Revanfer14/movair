@@ -31,6 +31,8 @@ final class MapNavigationViewModel: ObservableObject {
     @Published var accumulatedExposureUg: Int = 0
     @Published var exposureLevel: ExposureLevel = .low
     @Published var routeCoordinates: [CLLocationCoordinate2D] = []
+    @Published var originCoordinate: CLLocationCoordinate2D?
+    @Published var destinationCoordinate: CLLocationCoordinate2D?
     @Published var originTitle: String = "Current location"
     @Published var destinationTitle: String = "Destination"
     @Published var startedAt: Date = Date()
@@ -43,10 +45,29 @@ final class MapNavigationViewModel: ObservableObject {
     func configure(
         with route: RouteOption,
         originTitle: String = "Current location",
-        destinationTitle: String = "Destination"
+        destinationTitle: String = "Destination",
+        originCoordinate: CLLocationCoordinate2D? = nil,
+        destinationCoordinate: CLLocationCoordinate2D? = nil
     ) {
         self.originTitle = originTitle
         self.destinationTitle = destinationTitle
+        self.originCoordinate = originCoordinate ?? route.coordinates.first
+        // Prefer explicit destination; for round-trip polyline (returns to start) use midpoint
+        if let destinationCoordinate {
+            self.destinationCoordinate = destinationCoordinate
+        } else if route.coordinates.count >= 2 {
+            let first = route.coordinates.first!
+            let last = route.coordinates.last!
+            let returnedToStart = abs(first.latitude - last.latitude) < 0.0005
+                && abs(first.longitude - last.longitude) < 0.0005
+            if returnedToStart {
+                self.destinationCoordinate = route.coordinates[route.coordinates.count / 2]
+            } else {
+                self.destinationCoordinate = last
+            }
+        } else {
+            self.destinationCoordinate = nil
+        }
         startedAt = Date()
         routeCoordinates = route.coordinates
         distanceKm = route.distanceKm

@@ -44,8 +44,16 @@ struct RouteSelectionView: View {
                     centerCoordinate: locationManager.userLocation,
                     showsUserLocation: true,
                     routeCoordinates: viewModel.selectedRoute?.coordinates ?? [],
+                    originCoordinate: viewModel.currentOriginCoordinate,
                     destinationCoordinate: viewModel.destination?.coordinate,
-                    fitsRouteInView: true
+                    fitsRouteInView: true,
+                    routeEdgePadding: UIEdgeInsets(
+                        top: 130,
+                        left: 36,
+                        bottom: panelHeight + 56,
+                        right: 36
+                    ),
+                    showsOriginMarker: true
                 )
                 .ignoresSafeArea()
 
@@ -56,10 +64,25 @@ struct RouteSelectionView: View {
                     Spacer(minLength: 0)
                 }
 
-                // Round Trip toggle
+                // Recenter + Round Trip above panel
                 VStack(spacing: 10) {
-                    HStack {
+                    HStack(alignment: .bottom) {
+                        Button {
+                            locationManager.requestPermission()
+                            recenterTrigger = true
+                        } label: {
+                            Image(systemName: "location.fill")
+                                .font(Font.Brand.bodyBold)
+                                .foregroundStyle(Color.Brand.blue600)
+                                .frame(width: 40, height: 40)
+                                .background(.ultraThinMaterial, in: Circle())
+                                .shadow(color: .black.opacity(0.1), radius: 6, x: 0, y: 2)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Recenter map on route")
+
                         Spacer(minLength: 0)
+
                         MapRoundTripToggle(
                             isOn: Binding(
                                 get: { viewModel.isRoundTrip },
@@ -67,7 +90,7 @@ struct RouteSelectionView: View {
                             )
                         )
                     }
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, 16)
 
                     routePanel
                         .frame(height: panelHeight)
@@ -281,7 +304,7 @@ struct RouteSelectionView: View {
         .searchable(
             text: $endpointSearchViewModel.searchText,
             placement: .navigationBarDrawer(displayMode: .always),
-            prompt: target == .origin ? "Search starting point" : "Search destination"
+            prompt: target == .origin ? "Search origin" : "Search destination"
         )
         .autocorrectionDisabled()
         .background(Color(.systemGroupedBackground))
