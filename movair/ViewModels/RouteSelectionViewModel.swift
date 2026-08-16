@@ -4,12 +4,6 @@ import Combine
 
 @MainActor
 final class RouteSelectionViewModel: ObservableObject {
-    private struct ExposurePlaceholder {
-        let exposureRangeUg: ClosedRange<Int>
-        let exposureLevel: ExposureLevel
-        let pollutionDeltaPercent: Int
-    }
-
     @Published var originTitle: String = "Current location"
     @Published var destination: SelectedDestination?
     @Published var isRoundTrip: Bool = true
@@ -26,19 +20,18 @@ final class RouteSelectionViewModel: ObservableObject {
     }
 
     private let routingService: ORSRouting
+    private var exposureEstimator: RouteExposureEstimating?
     private let debounceDelay: Duration = .milliseconds(300)
     private var originCoordinate: CLLocationCoordinate2D?
     private var userLocationCoordinate: CLLocationCoordinate2D?
     private var routeTask: Task<Void, Never>?
 
-    private static let exposurePlaceholders: [ExposurePlaceholder] = [
-        ExposurePlaceholder(exposureRangeUg: 130...145, exposureLevel: .moderate, pollutionDeltaPercent: -10),
-        ExposurePlaceholder(exposureRangeUg: 150...165, exposureLevel: .high, pollutionDeltaPercent: 10),
-        ExposurePlaceholder(exposureRangeUg: 170...185, exposureLevel: .high, pollutionDeltaPercent: 20)
-    ]
-
-    init(routingService: ORSRouting = ORSRoutingService()) {
+    init(
+        routingService: ORSRouting = ORSRoutingService(),
+        exposureEstimator: RouteExposureEstimating? = nil
+    ) {
         self.routingService = routingService
+        self.exposureEstimator = exposureEstimator
     }
 
     func configure(origin: CLLocationCoordinate2D?, destination: SelectedDestination) {
@@ -136,12 +129,18 @@ final class RouteSelectionViewModel: ObservableObject {
             do {
                 let fetchedRoutes = try await self.routingService.fetchRoutes(from: origin, to: destination.coordinate)
                 guard !Task.isCancelled else { return }
-                self.applyFetchedRoutes(fetchedRoutes)
+                let routesForPlanning = self.detourEligibleRoutes(from: self.routesForPlanning(from: fetchedRoutes))
+                let estimator = try await self.resolvedExposureEstimator()
+                let estimates = try await estimator.estimate(routes: routesForPlanning, date: Date())
+                guard !Task.isCancelled else { return }
+                self.applyFetchedRoutes(routesForPlanning, estimates: estimates)
             } catch is CancellationError {
                 return
             } catch {
                 guard !Task.isCancelled else { return }
-                self.routeError = (error as? ORSRoutingError)?.userMessage ?? ORSRoutingError.requestFailed(statusCode: 0).userMessage
+                self.routeError = (error as? ORSRoutingError)?.userMessage
+                    ?? (error as? ExposureEstimationError)?.userMessage
+                    ?? ORSRoutingError.requestFailed(statusCode: 0).userMessage
                 self.routes = []
                 self.selectedRouteID = nil
                 self.isLoading = false
@@ -149,26 +148,40 @@ final class RouteSelectionViewModel: ObservableObject {
         }
     }
 
-    private func applyFetchedRoutes(_ fetchedRoutes: [ORSRoute]) {
-        let sorted = fetchedRoutes.sorted { $0.durationSeconds < $1.durationSeconds }
-        let shortestDistance = sorted.map(\.distanceMeters).min() ?? 0
+    private func applyFetchedRoutes(_ fetchedRoutes: [ORSRoute], estimates: [RouteExposureEstimate]) {
+        let estimatesByRouteID = Dictionary(uniqueKeysWithValues: estimates.map { ($0.routeID, $0) })
+        let lowestDose = fetchedRoutes.compactMap { estimatesByRouteID[$0.id]?.doseMicrograms }.min() ?? 0
+        let highestDose = fetchedRoutes.compactMap { estimatesByRouteID[$0.id]?.doseMicrograms }.max() ?? 0
+        let hasEquivalentExposure = lowestDose == 0
+            ? highestDose == 0
+            : (highestDose - lowestDose) / lowestDose < 0.20
+        let ranked = fetchedRoutes.sorted { lhs, rhs in
+            if hasEquivalentExposure {
+                return lhs.durationSeconds < rhs.durationSeconds
+            }
+            let lhsDose = estimatesByRouteID[lhs.id]?.doseMicrograms ?? .greatestFiniteMagnitude
+            let rhsDose = estimatesByRouteID[rhs.id]?.doseMicrograms ?? .greatestFiniteMagnitude
+            if lhsDose == rhsDose {
+                return lhs.durationSeconds < rhs.durationSeconds
+            }
+            return lhsDose < rhsDose
+        }
+        let shortestDistance = ranked.map(\.distanceMeters).min() ?? 0
 
-        routes = sorted.enumerated().map { index, route in
-            let placeholder = Self.exposurePlaceholders[min(index, Self.exposurePlaceholders.count - 1)]
-            let tripDistanceMeters = isRoundTrip ? route.distanceMeters * 2 : route.distanceMeters
-            let tripDurationSeconds = isRoundTrip ? route.durationSeconds * 2 : route.durationSeconds
-            let coordinates = isRoundTrip ? makeRoundTrip(route.coordinates) : route.coordinates
+        routes = ranked.enumerated().map { index, route in
+            let dose = estimatesByRouteID[route.id]?.doseMicrograms ?? 0
 
             return RouteOption(
                 title: "Route \(index + 1)",
-                distanceKm: tripDistanceMeters / 1000,
-                durationMinutes: Int((tripDurationSeconds / 60).rounded()),
-                exposureRangeUg: placeholder.exposureRangeUg,
-                exposureLevel: placeholder.exposureLevel,
-                pollutionDeltaPercent: placeholder.pollutionDeltaPercent,
+                distanceKm: route.distanceMeters / 1000,
+                durationMinutes: Int((route.durationSeconds / 60).rounded()),
+                exposureRangeUg: exposureRange(for: dose),
+                exposureLevel: ExposureLevel.from(exposureUg: Int(dose.rounded())),
+                pollutionDeltaPercent: pollutionDeltaPercent(dose: dose, comparedTo: lowestDose),
+                hasEquivalentExposure: hasEquivalentExposure,
                 isRecommended: index == 0,
                 isLonger: route.distanceMeters > shortestDistance,
-                coordinates: coordinates
+                coordinates: route.coordinates
             )
         }
 
@@ -180,5 +193,42 @@ final class RouteSelectionViewModel: ObservableObject {
         guard outbound.count >= 2 else { return outbound }
         let returnPath = outbound.dropLast().reversed()
         return outbound + returnPath
+    }
+
+    private func routesForPlanning(from routes: [ORSRoute]) -> [ORSRoute] {
+        guard isRoundTrip else { return routes }
+        return routes.map { route in
+            ORSRoute(
+                id: route.id,
+                coordinates: makeRoundTrip(route.coordinates),
+                distanceMeters: route.distanceMeters * 2,
+                durationSeconds: route.durationSeconds * 2
+            )
+        }
+    }
+
+    private func detourEligibleRoutes(from routes: [ORSRoute]) -> [ORSRoute] {
+        guard let fastestDuration = routes.map(\.durationSeconds).min() else { return [] }
+        return routes.filter { $0.durationSeconds <= fastestDuration * 1.5 }
+    }
+
+    private func resolvedExposureEstimator() async throws -> RouteExposureEstimating {
+        if let exposureEstimator {
+            return exposureEstimator
+        }
+        let exposureEstimator = try RouteExposureEstimator()
+        self.exposureEstimator = exposureEstimator
+        return exposureEstimator
+    }
+
+    private func exposureRange(for dose: Double) -> ClosedRange<Int> {
+        let lowerBound = max(0, Int((dose * 0.9).rounded(.down)))
+        let upperBound = max(lowerBound, Int((dose * 1.1).rounded(.up)))
+        return lowerBound...upperBound
+    }
+
+    private func pollutionDeltaPercent(dose: Double, comparedTo fastestDose: Double) -> Int {
+        guard fastestDose > 0 else { return 0 }
+        return Int((((dose - fastestDose) / fastestDose) * 100).rounded())
     }
 }

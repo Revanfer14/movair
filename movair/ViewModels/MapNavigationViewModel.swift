@@ -37,6 +37,9 @@ final class MapNavigationViewModel: ObservableObject {
     @Published var destinationTitle: String = "Destination"
     @Published var startedAt: Date = Date()
 
+    private var rideTracker: RideTracker?
+    private var isTrackingPaused = false
+
     var currentInstruction: Instruction? {
         guard instructions.indices.contains(currentInstructionIndex) else { return nil }
         return instructions[currentInstructionIndex]
@@ -70,11 +73,12 @@ final class MapNavigationViewModel: ObservableObject {
         }
         startedAt = Date()
         routeCoordinates = route.coordinates
-        distanceKm = route.distanceKm
-        durationMinutes = route.durationMinutes
-        averageSpeedKmh = route.durationMinutes > 0
-            ? (route.distanceKm / (Double(route.durationMinutes) / 60.0))
-            : 0
+        let segments = RouteSegmenter().makeSegments(from: route.coordinates)
+        rideTracker = RideTracker(segments: segments)
+        isTrackingPaused = false
+        distanceKm = 0
+        durationMinutes = 0
+        averageSpeedKmh = 0
         accumulatedExposureUg = route.exposureRangeUg.lowerBound
             + (route.exposureRangeUg.upperBound - route.exposureRangeUg.lowerBound) / 2
         exposureLevel = route.exposureLevel
@@ -97,6 +101,29 @@ final class MapNavigationViewModel: ObservableObject {
             )
         ]
         currentInstructionIndex = 0
+    }
+
+    func process(location: CLLocation) {
+        guard !isTrackingPaused, let rideTracker else { return }
+        apply(rideTracker.process(location: location))
+    }
+
+    func pauseTracking() {
+        isTrackingPaused = true
+    }
+
+    func resumeTracking() {
+        isTrackingPaused = false
+    }
+
+    private func apply(_ snapshot: RideTrackingSnapshot) {
+        distanceKm = snapshot.travelledDistanceMeters / 1000
+        durationMinutes = Int(snapshot.elapsedDuration / 60)
+        guard snapshot.elapsedDuration > 0 else {
+            averageSpeedKmh = 0
+            return
+        }
+        averageSpeedKmh = distanceKm / (snapshot.elapsedDuration / 3600)
     }
 
     func makeTripSummary(completedAt: Date = Date()) -> TripSummary {

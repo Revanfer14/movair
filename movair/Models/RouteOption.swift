@@ -10,6 +10,7 @@ struct RouteOption: Identifiable, Equatable {
     let exposureRangeUg: ClosedRange<Int>
     let exposureLevel: ExposureLevel
     let pollutionDeltaPercent: Int
+    let hasEquivalentExposure: Bool
     let isRecommended: Bool
     let isLonger: Bool
     let coordinates: [CLLocationCoordinate2D]
@@ -22,6 +23,7 @@ struct RouteOption: Identifiable, Equatable {
         exposureRangeUg: ClosedRange<Int>,
         exposureLevel: ExposureLevel,
         pollutionDeltaPercent: Int,
+        hasEquivalentExposure: Bool = false,
         isRecommended: Bool = false,
         isLonger: Bool = false,
         coordinates: [CLLocationCoordinate2D]
@@ -33,6 +35,7 @@ struct RouteOption: Identifiable, Equatable {
         self.exposureRangeUg = exposureRangeUg
         self.exposureLevel = exposureLevel
         self.pollutionDeltaPercent = pollutionDeltaPercent
+        self.hasEquivalentExposure = hasEquivalentExposure
         self.isRecommended = isRecommended
         self.isLonger = isLonger
         self.coordinates = coordinates
@@ -56,14 +59,14 @@ struct RouteOption: Identifiable, Equatable {
     }
 
     var pollutionDeltaLabel: String {
+        if hasEquivalentExposure {
+            return "Similar pollution to other routes"
+        }
         let absValue = abs(pollutionDeltaPercent)
-        if pollutionDeltaPercent < 0 {
-            return "±\(absValue)% less pollution than other routes"
-        }
         if pollutionDeltaPercent > 0 {
-            return "±\(absValue)% higher pollution than other routes"
+            return "\(absValue)% higher pollution than other routes"
         }
-        return "Similar pollution to other routes"
+        return "Lowest pollution"
     }
 
     static func == (lhs: RouteOption, rhs: RouteOption) -> Bool {

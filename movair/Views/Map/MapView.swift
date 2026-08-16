@@ -17,10 +17,6 @@ struct MapView: View {
     @State private var searchSheetDetent: PresentationDetent = .large
     @State private var completedTrip: TripSummary?
 
-    /// Simple elapsed-time tracker for the current ride (minutes).
-    @State private var elapsedMinutes: Int = 0
-    @State private var elapsedTimer: Timer?
-
     private var isRouteFlowPresented: Bool {
         phase == .routeSelection
             || phase == .navigating
@@ -37,6 +33,10 @@ struct MapView: View {
             }
             .onReceive(locationManager.$userLocation.compactMap { $0 }) { coordinate in
                 searchViewModel.biasSearch(around: coordinate)
+            }
+            .onReceive(locationManager.$latestLocation.compactMap { $0 }) { location in
+                guard phase == .navigating else { return }
+                activeNavigationViewModel.process(location: location)
             }
             .onChange(of: searchViewModel.selectedDestination) { _, destination in
                 guard let destination else { return }
@@ -60,6 +60,9 @@ struct MapView: View {
                 pushStateToWatch()
             }
             .onChange(of: activeNavigationViewModel.accumulatedExposureUg) { _, _ in
+                pushStateToWatch()
+            }
+            .onChange(of: activeNavigationViewModel.durationMinutes) { _, _ in
                 pushStateToWatch()
             }
             .fullScreenCover(isPresented: Binding(
@@ -93,7 +96,7 @@ struct MapView: View {
                         originCoordinate: routeSelectionViewModel.currentOriginCoordinate,
                         destinationCoordinate: routeSelectionViewModel.destination?.coordinate
                     )
-                    elapsedMinutes = 0
+                    locationManager.startRideTracking()
                     phase = .navigating
                 },
                 onClose: {
@@ -197,11 +200,11 @@ struct MapView: View {
     private func handlePhaseChange(_ newPhase: NavigationPhase) {
         switch newPhase {
         case .navigating:
-            startElapsedTimer()
+            activeNavigationViewModel.resumeTracking()
         case .paused:
-            stopElapsedTimer()
+            activeNavigationViewModel.pauseTracking()
         case .tripSummary, .browsing, .routeSelection:
-            stopElapsedTimer()
+            activeNavigationViewModel.pauseTracking()
         }
         pushStateToWatch()
     }
@@ -229,6 +232,7 @@ struct MapView: View {
         let trip = activeNavigationViewModel.makeTripSummary(completedAt: Date())
         tripStore.add(trip)
         completedTrip = trip
+        locationManager.stopRideTracking()
         phase = .tripSummary
     }
 
@@ -237,23 +241,8 @@ struct MapView: View {
             phase: phase,
             distanceKm: activeNavigationViewModel.distanceKm,
             exposureUg: activeNavigationViewModel.accumulatedExposureUg,
-            elapsedMinutes: elapsedMinutes
+            elapsedMinutes: activeNavigationViewModel.durationMinutes
         )
-    }
-
-    private func startElapsedTimer() {
-        stopElapsedTimer()
-        elapsedTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in
-            Task { @MainActor in
-                elapsedMinutes += 1
-                pushStateToWatch()
-            }
-        }
-    }
-
-    private func stopElapsedTimer() {
-        elapsedTimer?.invalidate()
-        elapsedTimer = nil
     }
 }
 
