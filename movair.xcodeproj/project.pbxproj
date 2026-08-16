@@ -6,6 +6,20 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		58217A753031DFF4005F5C1F /* movair Watch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 58217A6B3031DFF3005F5C1F /* movair Watch Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		58217A733031DFF4005F5C1F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 76B27471302CADCE00645351 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 58217A6A3031DFF3005F5C1F;
+			remoteInfo = "movair Watch Watch App";
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXCopyFilesBuildPhase section */
 		58217A663031DEC0005F5C1F /* Embed Watch Content */ = {
 			isa = PBXCopyFilesBuildPhase;
@@ -13,6 +27,7 @@
 			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
 			dstSubfolderSpec = 16;
 			files = (
+				58217A753031DFF4005F5C1F /* movair Watch Watch App.app in Embed Watch Content */,
 			);
 			name = "Embed Watch Content";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -20,6 +35,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		58217A6B3031DFF3005F5C1F /* movair Watch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "movair Watch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		76B27479302CADCE00645351 /* movair.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = movair.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -34,6 +50,11 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		58217A6C3031DFF3005F5C1F /* movair Watch App */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "movair Watch App";
+			sourceTree = "<group>";
+		};
 		76B2747B302CADCE00645351 /* movair */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -45,6 +66,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		58217A683031DFF3005F5C1F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		76B27476302CADCE00645351 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -59,6 +87,7 @@
 			isa = PBXGroup;
 			children = (
 				76B2747B302CADCE00645351 /* movair */,
+				58217A6C3031DFF3005F5C1F /* movair Watch App */,
 				76B2747A302CADCE00645351 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -67,6 +96,7 @@
 			isa = PBXGroup;
 			children = (
 				76B27479302CADCE00645351 /* movair.app */,
+				58217A6B3031DFF3005F5C1F /* movair Watch Watch App.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -74,6 +104,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		58217A6A3031DFF3005F5C1F /* movair Watch Watch App */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 58217A763031DFF4005F5C1F /* Build configuration list for PBXNativeTarget "movair Watch Watch App" */;
+			buildPhases = (
+				58217A673031DFF3005F5C1F /* Sources */,
+				58217A683031DFF3005F5C1F /* Frameworks */,
+				58217A693031DFF3005F5C1F /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				58217A6C3031DFF3005F5C1F /* movair Watch App */,
+			);
+			name = "movair Watch Watch App";
+			packageProductDependencies = (
+			);
+			productName = "movair Watch Watch App";
+			productReference = 58217A6B3031DFF3005F5C1F /* movair Watch Watch App.app */;
+			productType = "com.apple.product-type.application";
+		};
 		76B27478302CADCE00645351 /* movair */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 76B27484302CADCF00645351 /* Build configuration list for PBXNativeTarget "movair" */;
@@ -86,6 +138,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				58217A743031DFF4005F5C1F /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				76B2747B302CADCE00645351 /* movair */,
@@ -107,6 +160,9 @@
 				LastSwiftUpdateCheck = 2660;
 				LastUpgradeCheck = 2660;
 				TargetAttributes = {
+					58217A6A3031DFF3005F5C1F = {
+						CreatedOnToolsVersion = 26.6;
+					};
 					76B27478302CADCE00645351 = {
 						CreatedOnToolsVersion = 26.6;
 					};
@@ -127,11 +183,19 @@
 			projectRoot = "";
 			targets = (
 				76B27478302CADCE00645351 /* movair */,
+				58217A6A3031DFF3005F5C1F /* movair Watch Watch App */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		58217A693031DFF3005F5C1F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		76B27477302CADCE00645351 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -142,6 +206,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		58217A673031DFF3005F5C1F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		76B27475302CADCE00645351 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -151,7 +222,89 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		58217A743031DFF4005F5C1F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 58217A6A3031DFF3005F5C1F /* movair Watch Watch App */;
+			targetProxy = 58217A733031DFF4005F5C1F /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		58217A773031DFF4005F5C1F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "movair Watch App/movairWatchApp.entitlements";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 953242MS8N;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = movair;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Movair uses your heart rate during rides to estimate air intake.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Movair temporarily starts a cycling workout to read your heart rate during navigation.";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.sweetseventeen.movair;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sweetseventeen.movair.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 26.5;
+			};
+			name = Debug;
+		};
+		58217A783031DFF4005F5C1F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "movair Watch App/movairWatchApp.entitlements";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 953242MS8N;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = movair;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Movair uses your heart rate during rides to estimate air intake.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Movair temporarily starts a cycling workout to read your heart rate during navigation.";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.sweetseventeen.movair;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sweetseventeen.movair.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 26.5;
+			};
+			name = Release;
+		};
 		76B27482302CADCF00645351 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReferenceAnchor = 76B2747B302CADCE00645351 /* movair */;
@@ -288,7 +441,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 953242MS8N;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = movair/Info.plist;
@@ -328,7 +481,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 953242MS8N;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = movair/Info.plist;
@@ -360,6 +513,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		58217A763031DFF4005F5C1F /* Build configuration list for PBXNativeTarget "movair Watch Watch App" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				58217A773031DFF4005F5C1F /* Debug */,
+				58217A783031DFF4005F5C1F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		76B27474302CADCE00645351 /* Build configuration list for PBXProject "movair" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

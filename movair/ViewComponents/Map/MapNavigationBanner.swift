@@ -24,9 +24,9 @@ struct MapNavigationBanner: View {
         HStack(alignment: .center, spacing: 12) {
             Image(systemName: instruction.systemImage)
                 .font(Font.Brand.largeTitle)
-                .foregroundStyle(Color.Brand.labelPrimary)
+                .foregroundStyle(Color.primary)
                 .frame(width: 72, height: 72)
-                .background(Color.Brand.labelPrimary.opacity(0.2), in: Circle())
+                .background(Color.primary.opacity(0.2), in: Circle())
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
