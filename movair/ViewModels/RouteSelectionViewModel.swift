@@ -25,6 +25,10 @@ final class RouteSelectionViewModel: ObservableObject {
     private var originCoordinate: CLLocationCoordinate2D?
     private var userLocationCoordinate: CLLocationCoordinate2D?
     private var routeTask: Task<Void, Never>?
+    private var lastEstimationResult: RouteExposureEstimationResult?
+    private var lastOrigin: CLLocationCoordinate2D?
+    private var lastDestination: CLLocationCoordinate2D?
+    private var lastEstimationDate: Date?
 
     init(
         routingService: ORSRouting = ORSRoutingService(),
@@ -127,9 +131,13 @@ final class RouteSelectionViewModel: ObservableObject {
                 guard !Task.isCancelled else { return }
                 let routesForPlanning = self.detourEligibleRoutes(from: self.routesForPlanning(from: fetchedRoutes))
                 let estimator = try await self.resolvedExposureEstimator()
-                let estimates = try await estimator.estimate(routes: routesForPlanning, date: Date())
+                let estimationDate = Date()
+                let result = try await estimator.estimate(routes: routesForPlanning, date: estimationDate)
                 guard !Task.isCancelled else { return }
-                self.applyFetchedRoutes(routesForPlanning, estimates: estimates)
+                self.lastOrigin = origin
+                self.lastDestination = destination.coordinate
+                self.lastEstimationDate = estimationDate
+                self.applyFetchedRoutes(routesForPlanning, result: result)
             } catch is CancellationError {
                 return
             } catch {
@@ -144,7 +152,9 @@ final class RouteSelectionViewModel: ObservableObject {
         }
     }
 
-    private func applyFetchedRoutes(_ fetchedRoutes: [ORSRoute], estimates: [RouteExposureEstimate]) {
+    private func applyFetchedRoutes(_ fetchedRoutes: [ORSRoute], result: RouteExposureEstimationResult) {
+        lastEstimationResult = result
+        let estimates = result.routes
         let estimatesByRouteID = Dictionary(uniqueKeysWithValues: estimates.map { ($0.routeID, $0) })
         let lowestExposure = fetchedRoutes.compactMap { estimatesByRouteID[$0.id]?.exposure }.min() ?? 0
         let highestExposure = fetchedRoutes.compactMap { estimatesByRouteID[$0.id]?.exposure }.max() ?? 0
@@ -169,6 +179,7 @@ final class RouteSelectionViewModel: ObservableObject {
             let dose = estimatesByRouteID[route.id]?.doseMicrograms ?? 0
 
             return RouteOption(
+                id: route.id,
                 title: "Route \(index + 1)",
                 distanceKm: route.distanceMeters / 1000,
                 durationMinutes: Int((route.durationSeconds / 60).rounded()),
@@ -249,5 +260,93 @@ final class RouteSelectionViewModel: ObservableObject {
     private func pollutionDeltaPercent(dose: Double, comparedTo fastestDose: Double) -> Int {
         guard fastestDose > 0 else { return 0 }
         return Int((((dose - fastestDose) / fastestDose) * 100).rounded())
+    }
+
+    func routePlanPayload(chosenRouteID: UUID) -> RoutePlanPayload? {
+        guard let result = lastEstimationResult,
+              let origin = lastOrigin,
+              let destination = lastDestination,
+              let firstFetchGroup = result.fetchGroups.first,
+              !result.routes.isEmpty else {
+            return nil
+        }
+
+        let date = lastEstimationDate ?? Date()
+        let rankByRouteID = Dictionary(uniqueKeysWithValues: routes.enumerated().map { ($1.id, $0 + 1) })
+        let labelByRouteID = Dictionary(uniqueKeysWithValues: routes.map { ($0.id, $0.title) })
+
+        guard let chosenRank = rankByRouteID[chosenRouteID] else {
+            return nil
+        }
+
+        let payloadRoutes = result.routes.compactMap { estimate -> RoutePlanPayload.Route? in
+            guard let rank = rankByRouteID[estimate.routeID] else { return nil }
+            let segments = estimate.segments.map { segment in
+                RoutePlanPayload.Segment(
+                    index: segment.index,
+                    mid: RoutePlanPayload.Coordinate(lat: segment.midpoint.latitude, lon: segment.midpoint.longitude),
+                    cumStartMeters: segment.cumulativeStartMeters,
+                    cumEndMeters: segment.cumulativeEndMeters,
+                    roadClass: segment.roadClass,
+                    greeneryIndex: segment.greeneryIndex,
+                    mRoad: segment.roadMultiplier,
+                    mGreen: segment.greenMultiplier,
+                    cBase: segment.cBase,
+                    cI: segment.concentration,
+                    tISeconds: segment.durationSeconds,
+                    cITI: segment.concentrationTimesDuration,
+                    fetchGroupIndex: segment.fetchGroupIndex
+                )
+            }
+            return RoutePlanPayload.Route(
+                rank: rank,
+                label: labelByRouteID[estimate.routeID] ?? "Route \(rank)",
+                distanceMeters: estimate.distanceMeters,
+                durationSeconds: estimate.durationSeconds,
+                exposure: estimate.exposure,
+                doseUg: estimate.doseMicrograms,
+                segments: segments
+            )
+        }
+
+        guard !payloadRoutes.isEmpty else { return nil }
+
+        let fetchGroups = result.fetchGroups.map { group in
+            RoutePlanPayload.FetchGroup(
+                index: group.index,
+                reference: RoutePlanPayload.Coordinate(lat: group.reference.latitude, lon: group.reference.longitude),
+                basePM25: group.snapshot.basePM25,
+                windSpeed: group.snapshot.windSpeedMetersPerSecond,
+                relativeHumidity: group.snapshot.relativeHumidityPercent,
+                temperature: group.snapshot.temperatureCelsius,
+                hourOfDay: WIBTime.hourOfDay(for: date),
+                isWeekend: WIBTime.isWeekend(for: date),
+                cBase: group.cBase,
+                segmentCount: group.segmentCount
+            )
+        }
+
+        let weather = RoutePlanPayload.Weather(
+            basePM25: firstFetchGroup.snapshot.basePM25,
+            windSpeed: firstFetchGroup.snapshot.windSpeedMetersPerSecond,
+            relativeHumidity: firstFetchGroup.snapshot.relativeHumidityPercent,
+            temperature: firstFetchGroup.snapshot.temperatureCelsius,
+            hourOfDay: WIBTime.hourOfDay(for: date),
+            isWeekend: WIBTime.isWeekend(for: date),
+            cBase: firstFetchGroup.cBase
+        )
+
+        return RoutePlanPayload(
+            id: UUID().uuidString,
+            createdAtWIB: WIBTime.iso8601String(for: date),
+            modelVersion: result.modelVersion,
+            origin: RoutePlanPayload.Coordinate(lat: origin.latitude, lon: origin.longitude),
+            destination: RoutePlanPayload.Coordinate(lat: destination.latitude, lon: destination.longitude),
+            chosenRank: chosenRank,
+            equivalentExposure: routes.first?.hasEquivalentExposure ?? false,
+            weather: weather,
+            fetchGroups: fetchGroups,
+            routes: payloadRoutes
+        )
     }
 }
