@@ -4,22 +4,40 @@ import Combine
 
 @MainActor
 final class MapNavigationViewModel: ObservableObject {
-    struct Instruction: Identifiable, Equatable {
+    struct Instruction: Identifiable {
         let id: UUID
-        let distanceKm: Double
+        var distanceRemainingMeters: Double
         let text: String
         let systemImage: String
+        let targetCoordinate: CLLocationCoordinate2D
+        let waypointIndex: Int
 
         init(
             id: UUID = UUID(),
-            distanceKm: Double,
+            distanceRemainingMeters: Double,
             text: String,
-            systemImage: String
+            systemImage: String,
+            targetCoordinate: CLLocationCoordinate2D,
+            waypointIndex: Int = 0
         ) {
             self.id = id
-            self.distanceKm = distanceKm
+            self.distanceRemainingMeters = distanceRemainingMeters
             self.text = text
             self.systemImage = systemImage
+            self.targetCoordinate = targetCoordinate
+            self.waypointIndex = waypointIndex
+        }
+
+        var distanceLabel: String {
+            if distanceRemainingMeters < 1000 {
+                let meters = max(10, Int((distanceRemainingMeters / 10).rounded()) * 10)
+                return "\(meters) m"
+            }
+            let km = distanceRemainingMeters / 1000
+            if km < 10 {
+                return String(format: "%.1f km", km)
+            }
+            return String(format: "%.0f km", km)
         }
     }
 
@@ -112,23 +130,36 @@ final class MapNavigationViewModel: ObservableObject {
         doseSession = session
         rideTracker = RideTracker(segments: segments)
 
-        instructions = [
-            Instruction(
-                distanceKm: 3,
-                text: "Turn left onto Jalan Damai Foresta",
-                systemImage: "arrow.turn.up.left"
-            ),
-            Instruction(
-                distanceKm: 1.2,
-                text: "Continue straight on Boulevard Utara",
-                systemImage: "arrow.up"
-            ),
-            Instruction(
-                distanceKm: 0.8,
-                text: "Keep right toward \(destinationTitle)",
-                systemImage: "arrow.turn.up.right"
-            )
-        ]
+        if !route.steps.isEmpty {
+            instructions = route.steps.map { step in
+                Instruction(
+                    distanceRemainingMeters: step.distanceMeters,
+                    text: step.text,
+                    systemImage: step.systemImage,
+                    targetCoordinate: step.coordinate,
+                    waypointIndex: step.waypointIndex
+                )
+            }
+        } else {
+            let startCoord = route.coordinates.first ?? CLLocationCoordinate2D(latitude: 0, longitude: 0)
+            let endCoord = route.coordinates.last ?? CLLocationCoordinate2D(latitude: 0, longitude: 0)
+            instructions = [
+                Instruction(
+                    distanceRemainingMeters: route.distanceKm * 1000,
+                    text: "Head toward \(destinationTitle)",
+                    systemImage: "location.north.fill",
+                    targetCoordinate: endCoord,
+                    waypointIndex: 0
+                ),
+                Instruction(
+                    distanceRemainingMeters: 0,
+                    text: "Arrive at \(destinationTitle)",
+                    systemImage: "flag.fill",
+                    targetCoordinate: endCoord,
+                    waypointIndex: route.coordinates.count
+                )
+            ]
+        }
         currentInstructionIndex = 0
     }
 
@@ -137,6 +168,7 @@ final class MapNavigationViewModel: ObservableObject {
         let snapshot = rideTracker.process(location: location)
         latestTrackingSnapshot = snapshot
         applyTrackingMetrics(snapshot)
+        updateInstructionProgress(with: location)
         scheduleDoseUpdate(for: snapshot)
     }
 
@@ -206,6 +238,22 @@ final class MapNavigationViewModel: ObservableObject {
             return
         }
         averageSpeedKmh = distanceKm / (snapshot.elapsedDuration / 3600)
+    }
+
+    private func updateInstructionProgress(with location: CLLocation) {
+        guard instructions.indices.contains(currentInstructionIndex) else { return }
+
+        let currentTarget = instructions[currentInstructionIndex].targetCoordinate
+        let targetLocation = CLLocation(latitude: currentTarget.latitude, longitude: currentTarget.longitude)
+        let distanceMeters = location.distance(from: targetLocation)
+        instructions[currentInstructionIndex].distanceRemainingMeters = max(0, distanceMeters)
+
+        if distanceMeters < 30 && currentInstructionIndex < instructions.count - 1 {
+            currentInstructionIndex += 1
+            let nextTarget = instructions[currentInstructionIndex].targetCoordinate
+            let nextLocation = CLLocation(latitude: nextTarget.latitude, longitude: nextTarget.longitude)
+            instructions[currentInstructionIndex].distanceRemainingMeters = max(0, location.distance(from: nextLocation))
+        }
     }
 
     private func scheduleDoseUpdate(for snapshot: RideTrackingSnapshot) {

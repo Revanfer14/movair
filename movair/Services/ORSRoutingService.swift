@@ -1,12 +1,11 @@
 import Foundation
 import CoreLocation
 
-protocol ORSRouting {
+protocol ORSRouting: Sendable {
     func fetchRoutes(from origin: CLLocationCoordinate2D, to destination: CLLocationCoordinate2D) async throws -> [ORSRoute]
 }
 
 final class ORSRoutingService: ORSRouting {
-
     private static let directionsURL = URL(string: "https://api.openrouteservice.org/v2/directions/cycling-regular/geojson")!
     private static let alternativeRouteCount = 3
     private static let alternativeShareFactor = 0.6
@@ -47,7 +46,7 @@ final class ORSRoutingService: ORSRouting {
                 shareFactor: Self.alternativeShareFactor,
                 weightFactor: Self.alternativeWeightFactor
             ),
-            instructions: false,
+            instructions: true,
             elevation: false
         )
 
@@ -97,10 +96,37 @@ final class ORSRoutingService: ORSRouting {
             let coordinates = feature.geometry.coordinates.map {
                 CLLocationCoordinate2D(latitude: $0[1], longitude: $0[0])
             }
+
+            var steps: [RouteStep] = []
+            if let segments = feature.properties.segments {
+                for segment in segments {
+                    if let rawSteps = segment.steps {
+                        for step in rawSteps {
+                            let startWaypoint = step.wayPoints.first ?? 0
+                            let coordinate = coordinates.indices.contains(startWaypoint)
+                                ? coordinates[startWaypoint]
+                                : (coordinates.first ?? CLLocationCoordinate2D(latitude: 0, longitude: 0))
+                            steps.append(
+                                RouteStep(
+                                    distanceMeters: step.distance,
+                                    durationSeconds: step.duration,
+                                    maneuverType: step.type,
+                                    text: step.instruction,
+                                    streetName: step.name,
+                                    coordinate: coordinate,
+                                    waypointIndex: startWaypoint
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+
             return ORSRoute(
                 coordinates: coordinates,
                 distanceMeters: feature.properties.summary.distance,
-                durationSeconds: feature.properties.summary.duration
+                durationSeconds: feature.properties.summary.duration,
+                steps: steps
             )
         }
 
@@ -144,6 +170,31 @@ final class ORSRoutingService: ORSRouting {
 
     private struct Properties: Decodable {
         let summary: Summary
+        let segments: [Segment]?
+    }
+
+    private struct Segment: Decodable {
+        let distance: Double
+        let duration: Double
+        let steps: [Step]?
+    }
+
+    private struct Step: Decodable {
+        let distance: Double
+        let duration: Double
+        let type: Int
+        let instruction: String
+        let name: String
+        let wayPoints: [Int]
+
+        enum CodingKeys: String, CodingKey {
+            case distance
+            case duration
+            case type
+            case instruction
+            case name
+            case wayPoints = "way_points"
+        }
     }
 
     private struct Summary: Decodable {
