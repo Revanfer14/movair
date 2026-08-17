@@ -5,20 +5,16 @@
 //  Created by Jonathan Basuki on 16/08/26.
 //
 
-
 import Foundation
 import WatchConnectivity
 import Combine
 
-/// Handles all WatchConnectivity traffic on the iPhone side.
-/// Pushes ride state to the Watch and receives control actions (pause / resume / finish).
 @MainActor
 final class PhoneConnectivityManager: NSObject, ObservableObject {
-
     static let shared = PhoneConnectivityManager()
 
-    /// Actions coming from the Watch that the UI should react to.
     @Published private(set) var incomingAction: WCAction?
+    @Published private(set) var latestHeartRateBPM: Double?
 
     private var session: WCSession?
     private var lastSentPayload: WatchSessionPayload?
@@ -28,8 +24,6 @@ final class PhoneConnectivityManager: NSObject, ObservableObject {
         activate()
     }
 
-    // MARK: - Activation
-
     func activate() {
         guard WCSession.isSupported() else { return }
         let session = WCSession.default
@@ -38,16 +32,17 @@ final class PhoneConnectivityManager: NSObject, ObservableObject {
         self.session = session
     }
 
-    // MARK: - Push state to Watch
-
-    /// Call this whenever NavigationPhase or metrics change on iPhone.
     func send(phase: NavigationPhase, distanceKm: Double, exposureUg: Int, elapsedMinutes: Int) {
         let wcPhase: WCPhase
         switch phase {
-        case .navigating:   wcPhase = .active
-        case .paused:       wcPhase = .paused
-        case .tripSummary:  wcPhase = .completed
-        default:            wcPhase = .idle
+        case .navigating:
+            wcPhase = .active
+        case .paused:
+            wcPhase = .paused
+        case .tripSummary:
+            wcPhase = .completed
+        default:
+            wcPhase = .idle
         }
 
         let payload = WatchSessionPayload(
@@ -57,7 +52,6 @@ final class PhoneConnectivityManager: NSObject, ObservableObject {
             elapsedMinutes: elapsedMinutes
         )
 
-        // Avoid spamming identical payloads
         if payload == lastSentPayload { return }
         lastSentPayload = payload
 
@@ -65,22 +59,16 @@ final class PhoneConnectivityManager: NSObject, ObservableObject {
 
         let dict = payload.asDictionary
 
-        // Always keep application context up to date (Watch can read latest even if not reachable)
         do {
             try session.updateApplicationContext(dict)
         } catch {
-            print("[Phone WC] updateApplicationContext error: \(error.localizedDescription)")
         }
 
-        // If Watch is reachable, also send immediate message for snappy UI
         if session.isReachable {
-            session.sendMessage(dict, replyHandler: nil) { error in
-                print("[Phone WC] sendMessage error: \(error.localizedDescription)")
-            }
+            session.sendMessage(dict, replyHandler: nil, errorHandler: nil)
         }
     }
 
-    /// Convenience when only phase changes and metrics stay the same.
     func sendPhaseOnly(_ phase: NavigationPhase) {
         let current = lastSentPayload ?? .idle
         send(
@@ -91,14 +79,14 @@ final class PhoneConnectivityManager: NSObject, ObservableObject {
         )
     }
 
-    // MARK: - Consume action (UI should call this after handling)
-
     func consumeAction() {
         incomingAction = nil
     }
-}
 
-// MARK: - Shared payload types (duplicated for the iOS target)
+    func resetHeartRate() {
+        latestHeartRateBPM = nil
+    }
+}
 
 enum WCKeys {
     static let phase = "phase"
@@ -164,23 +152,16 @@ struct WatchSessionPayload: Equatable {
     }
 }
 
-// MARK: - WCSessionDelegate
-
 extension PhoneConnectivityManager: WCSessionDelegate {
-
     nonisolated func session(
         _ session: WCSession,
         activationDidCompleteWith activationState: WCSessionActivationState,
         error: Error?
-    ) {
-        if let error {
-            print("[Phone WC] activation error: \(error.localizedDescription)")
-        }
-    }
+    ) {}
 
     nonisolated func sessionDidBecomeInactive(_ session: WCSession) {}
+
     nonisolated func sessionDidDeactivate(_ session: WCSession) {
-        // Re-activate for subsequent pairings
         session.activate()
     }
 
@@ -200,7 +181,6 @@ extension PhoneConnectivityManager: WCSessionDelegate {
     ) {
         Task { @MainActor in
             self.handleIncoming(message)
-            // Reply with current state if Watch is requesting it
             if let actionRaw = message[WCKeys.action] as? String,
                actionRaw == WCAction.requestState.rawValue,
                let last = self.lastSentPayload {
@@ -223,7 +203,7 @@ extension PhoneConnectivityManager: WCSessionDelegate {
     @MainActor
     private func handleIncoming(_ message: [String: Any]) {
         if let heartRateBPM = message[WCKeys.heartRateBPM] as? Double {
-            print("[Phone WC] Heart rate: \(Int(heartRateBPM.rounded())) bpm")
+            latestHeartRateBPM = heartRateBPM
             return
         }
 
@@ -231,7 +211,6 @@ extension PhoneConnectivityManager: WCSessionDelegate {
               let action = WCAction(rawValue: actionRaw) else { return }
 
         if action == .requestState {
-            // Re-push last known state
             if let last = lastSentPayload {
                 send(
                     phase: phaseFrom(wcPhase: last.phase),
@@ -248,10 +227,14 @@ extension PhoneConnectivityManager: WCSessionDelegate {
 
     private func phaseFrom(wcPhase: WCPhase) -> NavigationPhase {
         switch wcPhase {
-        case .active:    return .navigating
-        case .paused:    return .paused
-        case .completed: return .tripSummary
-        case .idle:      return .browsing
+        case .active:
+            return .navigating
+        case .paused:
+            return .paused
+        case .completed:
+            return .tripSummary
+        case .idle:
+            return .browsing
         }
     }
 }

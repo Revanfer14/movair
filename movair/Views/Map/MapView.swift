@@ -3,7 +3,6 @@ import MapKit
 import Combine
 
 struct MapView: View {
-
     @StateObject private var locationManager = LocationManager()
     @StateObject private var searchViewModel = MapSearchViewModel()
     @StateObject private var routeSelectionViewModel = RouteSelectionViewModel()
@@ -16,6 +15,8 @@ struct MapView: View {
     @State private var recenterTrigger = false
     @State private var searchSheetDetent: PresentationDetent = .large
     @State private var completedTrip: TripSummary?
+    @State private var isStartingNavigation = false
+    @State private var navigationStartError: String?
 
     private var isRouteFlowPresented: Bool {
         phase == .routeSelection
@@ -37,6 +38,9 @@ struct MapView: View {
             .onReceive(locationManager.$latestLocation.compactMap { $0 }) { location in
                 guard phase == .navigating else { return }
                 activeNavigationViewModel.process(location: location)
+            }
+            .onReceive(phoneConnectivity.$latestHeartRateBPM) { bpm in
+                activeNavigationViewModel.updateHeartRate(bpm)
             }
             .onChange(of: searchViewModel.selectedDestination) { _, destination in
                 guard let destination else { return }
@@ -87,23 +91,47 @@ struct MapView: View {
                 viewModel: routeSelectionViewModel,
                 locationManager: locationManager,
                 onStart: { route in
+                    guard !isStartingNavigation else { return }
+                    isStartingNavigation = true
+                    navigationStartError = nil
                     let origin = routeSelectionViewModel.originTitle
                     let destination = routeSelectionViewModel.destination?.title ?? "Destination"
-                    activeNavigationViewModel.configure(
-                        with: route,
-                        originTitle: origin,
-                        destinationTitle: destination,
-                        originCoordinate: routeSelectionViewModel.currentOriginCoordinate,
-                        destinationCoordinate: routeSelectionViewModel.destination?.coordinate
-                    )
-                    locationManager.startRideTracking()
-                    phase = .navigating
+                    Task {
+                        defer { isStartingNavigation = false }
+                        do {
+                            try await activeNavigationViewModel.configure(
+                                with: route,
+                                originTitle: origin,
+                                destinationTitle: destination,
+                                originCoordinate: routeSelectionViewModel.currentOriginCoordinate,
+                                destinationCoordinate: routeSelectionViewModel.destination?.coordinate
+                            )
+                            locationManager.startRideTracking()
+                            phase = .navigating
+                        } catch {
+                            navigationStartError = (error as? ExposureEstimationError)?.userMessage
+                                ?? "Live exposure tracking could not be started. Please try again."
+                        }
+                    }
                 },
                 onClose: {
                     searchViewModel.clearSelection()
                     phase = .browsing
                 }
             )
+            .alert(
+                "Unable to start ride",
+                isPresented: Binding(
+                    get: { navigationStartError != nil },
+                    set: { if !$0 { navigationStartError = nil } }
+                )
+            ) {
+                Button("OK", role: .cancel) {
+                    navigationStartError = nil
+                }
+            } message: {
+                Text(navigationStartError ?? "")
+            }
         case .navigating, .paused:
             ActiveNavigationView(
                 viewModel: activeNavigationViewModel,
@@ -195,8 +223,6 @@ struct MapView: View {
         .padding(.bottom, 24)
     }
 
-    // MARK: - Watch sync helpers
-
     private func handlePhaseChange(_ newPhase: NavigationPhase) {
         switch newPhase {
         case .navigating:
@@ -233,6 +259,8 @@ struct MapView: View {
         tripStore.add(trip)
         completedTrip = trip
         locationManager.stopRideTracking()
+        phoneConnectivity.resetHeartRate()
+        activeNavigationViewModel.updateHeartRate(nil)
         phase = .tripSummary
     }
 

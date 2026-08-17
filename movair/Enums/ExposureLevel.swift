@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-enum ExposureLevel: String, Equatable {
+enum ExposureLevel: String, Codable, Equatable {
     case low
     case moderate
     case high

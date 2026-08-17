@@ -1,6 +1,6 @@
 import CoreLocation
 
-protocol OpenMeteoProviding {
+protocol OpenMeteoProviding: Sendable {
     func weather(at coordinate: CLLocationCoordinate2D, date: Date) async throws -> WeatherSnapshot
 }
 
@@ -19,8 +19,16 @@ final class OpenMeteoService: OpenMeteoProviding {
         let weatherResponse = try await weather
         let hour = hourKey(for: date)
 
-        guard let airQualityIndex = airQualityResponse.hourly.time.firstIndex(of: hour),
-              let weatherIndex = weatherResponse.hourly.time.firstIndex(of: hour) else {
+        let airQualityIndex = airQualityResponse.hourly.time.firstIndex(of: hour)
+            ?? defaultHourIndex(for: date, count: airQualityResponse.hourly.time.count)
+        let weatherIndex = weatherResponse.hourly.time.firstIndex(of: hour)
+            ?? defaultHourIndex(for: date, count: weatherResponse.hourly.time.count)
+
+        guard let airQualityIndex,
+              let weatherIndex,
+              airQualityResponse.hourly.pm25.indices.contains(airQualityIndex),
+              weatherResponse.hourly.windSpeed.indices.contains(weatherIndex),
+              weatherResponse.hourly.relativeHumidity.indices.contains(weatherIndex) else {
             throw ExposureEstimationError.unavailableData
         }
 
@@ -86,6 +94,14 @@ final class OpenMeteoService: OpenMeteoProviding {
         calendar.timeZone = wibTimeZone
         let components = calendar.dateComponents([.year, .month, .day, .hour], from: date)
         return String(format: "%04d-%02d-%02dT%02d:00", components.year ?? 0, components.month ?? 0, components.day ?? 0, components.hour ?? 0)
+    }
+
+    private func defaultHourIndex(for date: Date, count: Int) -> Int? {
+        guard count > 0 else { return nil }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = wibTimeZone
+        let hour = calendar.component(.hour, from: date)
+        return min(max(0, hour), count - 1)
     }
 
     private struct AirQualityResponse: Decodable {

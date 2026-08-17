@@ -79,10 +79,17 @@ struct TripSummaryView: View {
                     .font(Font.Brand.title2Bold)
                     .foregroundStyle(exposureValueColor)
 
-                Text("Your Estimated Exposure")
+                Text(trip.isMeasuredExposure ? "Your Measured Exposure" : "Your Estimated Exposure")
                     .font(Font.Brand.footnote)
                     .foregroundStyle(Color.Brand.darkgray)
                     .fixedSize(horizontal: false, vertical: true)
+
+                if let unattributedDurationLabel = trip.unattributedDurationLabel {
+                    Text(unattributedDurationLabel)
+                        .font(Font.Brand.footnote)
+                        .foregroundStyle(Color.Brand.primaryOrange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.trailing, 12)

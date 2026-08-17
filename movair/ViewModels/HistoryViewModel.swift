@@ -29,11 +29,11 @@ final class HistoryViewModel: ObservableObject {
     }
 
     var dailyBudgetLabel: String {
-        "\(selectedDayExposure) µg/m³"
+        "\(selectedDayExposure) µg"
     }
 
     var dailyBudgetSubLabel: String {
-        "of \(dailyBudgetUg) µg/m³"
+        "of \(dailyBudgetUg) µg"
     }
 
     var latestTrip: TripSummary? {

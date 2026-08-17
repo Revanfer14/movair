@@ -150,23 +150,24 @@ final class RouteSelectionViewModel: ObservableObject {
 
     private func applyFetchedRoutes(_ fetchedRoutes: [ORSRoute], estimates: [RouteExposureEstimate]) {
         let estimatesByRouteID = Dictionary(uniqueKeysWithValues: estimates.map { ($0.routeID, $0) })
-        let lowestDose = fetchedRoutes.compactMap { estimatesByRouteID[$0.id]?.doseMicrograms }.min() ?? 0
-        let highestDose = fetchedRoutes.compactMap { estimatesByRouteID[$0.id]?.doseMicrograms }.max() ?? 0
-        let hasEquivalentExposure = lowestDose == 0
-            ? highestDose == 0
-            : (highestDose - lowestDose) / lowestDose < 0.20
+        let lowestExposure = fetchedRoutes.compactMap { estimatesByRouteID[$0.id]?.exposure }.min() ?? 0
+        let highestExposure = fetchedRoutes.compactMap { estimatesByRouteID[$0.id]?.exposure }.max() ?? 0
+        let hasEquivalentExposure = lowestExposure == 0
+            ? highestExposure == 0
+            : (highestExposure - lowestExposure) / lowestExposure < DoseConstants.equivalentExposureThreshold
         let ranked = fetchedRoutes.sorted { lhs, rhs in
             if hasEquivalentExposure {
                 return lhs.durationSeconds < rhs.durationSeconds
             }
-            let lhsDose = estimatesByRouteID[lhs.id]?.doseMicrograms ?? .greatestFiniteMagnitude
-            let rhsDose = estimatesByRouteID[rhs.id]?.doseMicrograms ?? .greatestFiniteMagnitude
-            if lhsDose == rhsDose {
+            let lhsExposure = estimatesByRouteID[lhs.id]?.exposure ?? .greatestFiniteMagnitude
+            let rhsExposure = estimatesByRouteID[rhs.id]?.exposure ?? .greatestFiniteMagnitude
+            if lhsExposure == rhsExposure {
                 return lhs.durationSeconds < rhs.durationSeconds
             }
-            return lhsDose < rhsDose
+            return lhsExposure < rhsExposure
         }
         let shortestDistance = ranked.map(\.distanceMeters).min() ?? 0
+        let lowestDose = fetchedRoutes.compactMap { estimatesByRouteID[$0.id]?.doseMicrograms }.min() ?? 0
 
         routes = ranked.enumerated().map { index, route in
             let dose = estimatesByRouteID[route.id]?.doseMicrograms ?? 0
@@ -209,7 +210,7 @@ final class RouteSelectionViewModel: ObservableObject {
 
     private func detourEligibleRoutes(from routes: [ORSRoute]) -> [ORSRoute] {
         guard let fastestDuration = routes.map(\.durationSeconds).min() else { return [] }
-        return routes.filter { $0.durationSeconds <= fastestDuration * 1.5 }
+        return routes.filter { $0.durationSeconds <= fastestDuration * DoseConstants.detourCapFactor }
     }
 
     private func resolvedExposureEstimator() async throws -> RouteExposureEstimating {

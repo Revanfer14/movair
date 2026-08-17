@@ -1,16 +1,14 @@
 import Foundation
 
-protocol VentilationRateProvider {
+protocol VentilationRateProvider: Sendable {
     func prepare() async
     func ventilationRate(heartRateBPM: Double) -> Double
 }
 
-final class ConstantVentilationRate: VentilationRateProvider {
-    private static let fallbackRateCubicMetersPerMinute = 0.040
-
+final class ConstantVentilationRate: VentilationRateProvider, Sendable {
     func prepare() async {}
 
     func ventilationRate(heartRateBPM: Double) -> Double {
-        Self.fallbackRateCubicMetersPerMinute
+        DoseConstants.ventilationRateCubicMetersPerMinute
     }
 }

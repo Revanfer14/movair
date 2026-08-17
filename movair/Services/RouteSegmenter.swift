@@ -5,7 +5,7 @@ protocol RouteSegmenting {
 }
 
 struct RouteSegmenter: RouteSegmenting {
-    private let targetSegmentLengthMeters = 200.0
+    private let targetSegmentLengthMeters = DoseConstants.segmentLengthMeters
 
     func makeSegments(from coordinates: [CLLocationCoordinate2D]) -> [RouteSegment] {
         guard coordinates.count > 1 else { return [] }

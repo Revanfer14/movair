@@ -8,14 +8,42 @@ final class TripHistoryStore: ObservableObject {
 
     static let shared = TripHistoryStore()
 
-    init(seedDummy: Bool = true) {
-        if seedDummy {
+    private let storageURL: URL
+
+    init(seedDummy: Bool = false) {
+        let fileManager = FileManager.default
+        let directory = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
+
+        if !fileManager.fileExists(atPath: directory.path) {
+            try? fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        }
+
+        storageURL = directory.appendingPathComponent("trips.json")
+
+        if let loaded = loadFromDisk(), !loaded.isEmpty {
+            trips = loaded
+        } else if seedDummy {
             trips = Self.makeDummyTrips()
+            saveToDisk()
+        } else {
+            trips = []
         }
     }
 
     func add(_ trip: TripSummary) {
         trips.insert(trip, at: 0)
+        saveToDisk()
+    }
+
+    func delete(tripID: UUID) {
+        trips.removeAll { $0.id == tripID }
+        saveToDisk()
+    }
+
+    func clear() {
+        trips.removeAll()
+        saveToDisk()
     }
 
     func trips(forWeekContaining date: Date = Date()) -> [TripSummary] {
@@ -31,6 +59,16 @@ final class TripHistoryStore: ObservableObject {
         let dayTrips = trips.filter { calendar.isDate($0.completedAt, inSameDayAs: day) }
         guard !dayTrips.isEmpty else { return nil }
         return dayTrips.reduce(0) { $0 + $1.exposureUg }
+    }
+
+    private func loadFromDisk() -> [TripSummary]? {
+        guard let data = try? Data(contentsOf: storageURL) else { return nil }
+        return try? JSONDecoder().decode([TripSummary].self, from: data)
+    }
+
+    private func saveToDisk() {
+        guard let data = try? JSONEncoder().encode(trips) else { return }
+        try? data.write(to: storageURL, options: [.atomic])
     }
 
     private static func makeDummyTrips() -> [TripSummary] {

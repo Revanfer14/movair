@@ -1,6 +1,6 @@
 import Foundation
 
-protocol RouteExposureEstimating {
+protocol RouteExposureEstimating: Sendable {
     func estimate(routes: [ORSRoute], date: Date) async throws -> [RouteExposureEstimate]
 }
 
@@ -13,11 +13,13 @@ actor RouteExposureEstimator: RouteExposureEstimating {
     init(
         segmenter: RouteSegmenting = RouteSegmenter(),
         weatherService: OpenMeteoProviding = OpenMeteoService(),
-        predictor: PMPredicting? = nil
+        predictor: PMPredicting? = nil,
+        roadDataStore: RoadDataProviding? = nil
     ) throws {
         self.segmenter = segmenter
         self.weatherService = weatherService
         self.predictor = try predictor ?? PMPredictor()
+        self.roadDataStore = roadDataStore
     }
 
     func estimate(routes: [ORSRoute], date: Date = Date()) async throws -> [RouteExposureEstimate] {
@@ -30,7 +32,7 @@ actor RouteExposureEstimator: RouteExposureEstimating {
         }
 
         let cells = Set(routeSegments.flatMap { $0.1.map { CAMSCell(coordinate: $0.midpoint) } })
-        guard cells.count <= 8 else {
+        guard cells.count <= DoseConstants.maxCAMSCellsPerRequest else {
             throw ExposureEstimationError.routeOutsideValidatedCoverage
         }
 
@@ -51,20 +53,29 @@ actor RouteExposureEstimator: RouteExposureEstimating {
                 throw ExposureEstimationError.invalidRoute
             }
 
-            let weightedConcentrationMinutes = try segments.reduce(0.0) { total, segment in
+            let exposure = try segments.reduce(0.0) { total, segment in
                 let cell = CAMSCell(coordinate: segment.midpoint)
                 guard let basePM25 = basePM25ByCell[cell] else {
                     throw ExposureEstimationError.unavailableData
                 }
                 let attributes = try roadDataStore.attributes(for: segment.midpoint)
-                let concentration = basePM25 * roadMultiplier(for: attributes.roadClass) * greenMultiplier(for: attributes.greeneryIndex)
-                let minutes = route.durationSeconds / 60 * (segment.distanceMeters / totalSegmentDistance)
+                let concentration = DoseCalculator.concentration(
+                    basePM25: basePM25,
+                    roadClass: attributes.roadClass,
+                    greeneryIndex: attributes.greeneryIndex
+                )
+                let minutes = DoseCalculator.planningMinutes(
+                    routeDurationSeconds: route.durationSeconds,
+                    segmentDistanceMeters: segment.distanceMeters,
+                    totalDistanceMeters: totalSegmentDistance
+                )
                 return total + concentration * minutes
             }
 
             return RouteExposureEstimate(
                 routeID: route.id,
-                doseMicrograms: weightedConcentrationMinutes * 0.040
+                exposure: exposure,
+                doseMicrograms: DoseCalculator.doseMicrograms(exposure: exposure)
             )
         }
     }
@@ -73,20 +84,12 @@ actor RouteExposureEstimator: RouteExposureEstimating {
         if let roadDataStore {
             return roadDataStore
         }
+        if let shared = RoadDataStore.shared {
+            self.roadDataStore = shared
+            return shared
+        }
         let roadDataStore = try RoadDataStore()
         self.roadDataStore = roadDataStore
         return roadDataStore
-    }
-
-    private func roadMultiplier(for roadClass: Int) -> Double {
-        switch roadClass {
-        case 2: return 1.25
-        case 3: return 1.15
-        default: return 1.0
-        }
-    }
-
-    private func greenMultiplier(for greeneryIndex: Double) -> Double {
-        1 - 0.05 * greeneryIndex
     }
 }

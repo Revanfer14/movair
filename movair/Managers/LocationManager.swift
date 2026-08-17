@@ -13,7 +13,7 @@ final class LocationManager: NSObject, ObservableObject {
         super.init()
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
-        manager.distanceFilter = 10 // update when user moves ~10m
+        manager.distanceFilter = 10
         manager.activityType = .fitness
         authorizationStatus = manager.authorizationStatus
     }
@@ -43,6 +43,7 @@ final class LocationManager: NSObject, ObservableObject {
 
     func startRideTracking() {
         manager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
+        manager.distanceFilter = kCLDistanceFilterNone
         manager.activityType = .fitness
         manager.pausesLocationUpdatesAutomatically = false
         manager.allowsBackgroundLocationUpdates = true
@@ -62,6 +63,7 @@ final class LocationManager: NSObject, ObservableObject {
     }
 
     func stopRideTracking() {
+        manager.distanceFilter = 10
         manager.allowsBackgroundLocationUpdates = false
         manager.pausesLocationUpdatesAutomatically = true
     }
@@ -98,6 +100,5 @@ extension LocationManager: CLLocationManagerDelegate {
         DispatchQueue.main.async {
             self.locationError = error.localizedDescription
         }
-        print("LocationManager error: \(error.localizedDescription)")
     }
 }

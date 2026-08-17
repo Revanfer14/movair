@@ -7,8 +7,8 @@ private enum HealthKitProfileError: Error {
     case missingHeight
 }
 
-final class HealthKitVentilationRateProvider: VentilationRateProvider {
-    private struct Profile {
+final class HealthKitVentilationRateProvider: VentilationRateProvider, @unchecked Sendable {
+    private struct Profile: Sendable {
         let ageYears: Double
         let sex: BiologicalSexForFormula
         let heightCm: Double
@@ -24,10 +24,7 @@ final class HealthKitVentilationRateProvider: VentilationRateProvider {
     }
 
     func prepare() async {
-        print("[HealthKit VE] prepare() started")
-
         guard HKHealthStore.isHealthDataAvailable() else {
-            print("[HealthKit VE] Health data NOT available on this device")
             cachedProfile = nil
             return
         }
@@ -36,7 +33,6 @@ final class HealthKitVentilationRateProvider: VentilationRateProvider {
               let heightType = HKObjectType.quantityType(forIdentifier: .height),
               let dateOfBirthType = HKObjectType.characteristicType(forIdentifier: .dateOfBirth),
               let biologicalSexType = HKObjectType.characteristicType(forIdentifier: .biologicalSex) else {
-            print("[HealthKit VE] Required HealthKit types unavailable")
             cachedProfile = nil
             return
         }
@@ -45,7 +41,6 @@ final class HealthKitVentilationRateProvider: VentilationRateProvider {
 
         do {
             try await healthStore.requestAuthorization(toShare: [], read: readTypes)
-            print("[HealthKit VE] Authorization requested (read: DOB, sex, height, heartRate)")
 
             let ageYears = try resolvedAgeYears()
             let sex = resolvedSex()
@@ -62,29 +57,13 @@ final class HealthKitVentilationRateProvider: VentilationRateProvider {
                 heightCm: heightCm,
                 fvcLiters: fvc
             )
-
-            print("[HealthKit VE] Profile OK")
-            print("[HealthKit VE]   ageYears  = \(ageYears)")
-            print("[HealthKit VE]   sex       = \(sex == .female ? "female" : "male") (raw=\(sex.rawValue))")
-            print("[HealthKit VE]   heightCm  = \(String(format: "%.1f", heightCm))")
-            print("[HealthKit VE]   fvcLiters = \(String(format: "%.3f", fvc))")
-            // Sample VE at resting HR ~70 for console visibility only
-            let sampleVE = MinuteVentilationEstimator.estimatedVentilationRate(
-                heartRateBPM: 70,
-                ageYears: ageYears,
-                sex: sex,
-                fvcLiters: fvc
-            )
-            print("[HealthKit VE]   sample VE @70 bpm = \(String(format: "%.5f", sampleVE)) m³/min")
         } catch {
             cachedProfile = nil
-            print("[HealthKit VE] prepare() FAILED: \(error)")
-            print("[HealthKit VE] Falling back to ConstantVentilationRate (0.040 m³/min)")
         }
     }
 
     func ventilationRate(heartRateBPM: Double) -> Double {
-        guard let cachedProfile else {
+        guard let cachedProfile, heartRateBPM > 30 else {
             return fallback.ventilationRate(heartRateBPM: heartRateBPM)
         }
 
@@ -109,16 +88,12 @@ final class HealthKitVentilationRateProvider: VentilationRateProvider {
 
     private func resolvedSex() -> BiologicalSexForFormula {
         guard let biologicalSex = try? healthStore.biologicalSex().biologicalSex else {
-            print("[HealthKit VE] biologicalSex unavailable → default male")
             return .male
         }
         switch biologicalSex {
         case .female:
             return .female
         case .male, .other, .notSet:
-            if biologicalSex != .male {
-                print("[HealthKit VE] biologicalSex=\(biologicalSex.rawValue) → mapped to male")
-            }
             return .male
         @unknown default:
             return .male

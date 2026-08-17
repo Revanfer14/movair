@@ -9,7 +9,7 @@ struct ActiveNavigationView: View {
     var onPause: () -> Void
     var onResume: () -> Void
     var onFinish: () -> Void
-    var onBack: (() -> Void)? = nil
+    var onBack: (() -> Void)?
 
     @State private var recenterTrigger = false
 
@@ -52,6 +52,8 @@ struct ActiveNavigationView: View {
                     averageSpeedKmh: viewModel.averageSpeedKmh,
                     accumulatedExposureUg: viewModel.accumulatedExposureUg,
                     exposureLevel: viewModel.exposureLevel,
+                    isOffRoute: viewModel.isOffRoute,
+                    unattributedDurationMinutes: viewModel.unattributedDurationMinutes,
                     onPause: onPause,
                     onResume: onResume,
                     onFinish: onFinish
@@ -92,24 +94,7 @@ struct ActiveNavigationView: View {
 
 #Preview {
     let vm = MapNavigationViewModel()
-    vm.configure(
-        with: RouteOption(
-            title: "Cleaner Route",
-            distanceKm: 14,
-            durationMinutes: 37,
-            exposureRangeUg: 100...120,
-            exposureLevel: .low,
-            pollutionDeltaPercent: -10,
-            isRecommended: true,
-            coordinates: [
-                CLLocationCoordinate2D(latitude: -6.29, longitude: 106.64),
-                CLLocationCoordinate2D(latitude: -6.30, longitude: 106.65)
-            ]
-        ),
-        originTitle: "Current location",
-        destinationTitle: "BXChange Mall"
-    )
-    return ActiveNavigationView(
+    ActiveNavigationView(
         viewModel: vm,
         locationManager: LocationManager(),
         isPaused: false,
@@ -117,4 +102,23 @@ struct ActiveNavigationView: View {
         onResume: {},
         onFinish: {}
     )
+    .task {
+        try? await vm.configure(
+            with: RouteOption(
+                title: "Cleaner Route",
+                distanceKm: 14,
+                durationMinutes: 37,
+                exposureRangeUg: 100...120,
+                exposureLevel: .low,
+                pollutionDeltaPercent: -10,
+                isRecommended: true,
+                coordinates: [
+                    CLLocationCoordinate2D(latitude: -6.29, longitude: 106.64),
+                    CLLocationCoordinate2D(latitude: -6.30, longitude: 106.65)
+                ]
+            ),
+            originTitle: "Current location",
+            destinationTitle: "BXChange Mall"
+        )
+    }
 }

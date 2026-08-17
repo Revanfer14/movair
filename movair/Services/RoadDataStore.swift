@@ -1,10 +1,10 @@
 import CoreLocation
 
-protocol RoadDataProviding {
+protocol RoadDataProviding: Sendable {
     func attributes(for coordinate: CLLocationCoordinate2D) throws -> RoadAttributes
 }
 
-final class RoadDataStore: RoadDataProviding {
+final class RoadDataStore: RoadDataProviding, @unchecked Sendable {
     private struct Dataset: Decodable {
         let meta: Metadata
         let cells: [String: [Double]]
@@ -21,6 +21,8 @@ final class RoadDataStore: RoadDataProviding {
             case step
         }
     }
+
+    static let shared: RoadDataStore? = try? RoadDataStore()
 
     private let dataset: Dataset
 

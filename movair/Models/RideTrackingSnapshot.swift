@@ -6,4 +6,6 @@ struct RideTrackingSnapshot {
     let unattributedDuration: TimeInterval
     let travelledDistanceMeters: Double
     let isOffRoute: Bool
+    let activeSegmentIndex: Int?
+    let interpolatedSegmentFlags: [Bool]
 }
