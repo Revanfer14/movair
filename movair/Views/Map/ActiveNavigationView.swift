@@ -22,20 +22,21 @@ struct ActiveNavigationView: View {
                 routeCoordinates: viewModel.routeCoordinates,
                 originCoordinate: viewModel.originCoordinate,
                 destinationCoordinate: viewModel.destinationCoordinate,
-                fitsRouteInView: true,
-                routeEdgePadding: UIEdgeInsets(top: 120, left: 40, bottom: 280, right: 40),
-                showsOriginMarker: true
+                fitsRouteInView: false,
+                showsOriginMarker: true,
+                isNavigationTracking: true,
+                userHeading: locationManager.userHeading,
+                routeHeading: viewModel.routeHeadingDegrees,
+                navigationAltitude: 200,
+                navigationPitch: 55
             )
             .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                if !viewModel.instructions.isEmpty {
+                if !viewModel.upcomingInstructions.isEmpty {
                     MapNavigationBanner(
-                        instructions: viewModel.instructions,
-                        currentIndex: Binding(
-                            get: { viewModel.currentInstructionIndex },
-                            set: { viewModel.setInstructionIndex($0) }
-                        )
+                        instructions: viewModel.upcomingInstructions,
+                        currentIndex: $viewModel.selectedUpcomingOffset
                     )
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
@@ -69,7 +70,7 @@ struct ActiveNavigationView: View {
         HStack {
             Spacer()
             VStack(spacing: 10) {
-                mapControlButton(systemName: "location.fill") {
+                mapControlButton(systemName: "location.north.fill") {
                     locationManager.requestPermission()
                     recenterTrigger = true
                 }

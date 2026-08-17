@@ -1,10 +1,11 @@
 import Foundation
 import CoreLocation
 import Combine
+import SwiftUI
 
 @MainActor
 final class MapNavigationViewModel: ObservableObject {
-    struct Instruction: Identifiable {
+    struct Instruction: Identifiable, Equatable {
         let id: UUID
         var distanceRemainingMeters: Double
         let text: String
@@ -30,8 +31,8 @@ final class MapNavigationViewModel: ObservableObject {
 
         var distanceLabel: String {
             if distanceRemainingMeters < 1000 {
-                let meters = max(10, Int((distanceRemainingMeters / 10).rounded()) * 10)
-                return "\(meters) m"
+                let rounded = max(0, Int((distanceRemainingMeters / 10).rounded()) * 10)
+                return "\(rounded) m"
             }
             let km = distanceRemainingMeters / 1000
             if km < 10 {
@@ -39,10 +40,21 @@ final class MapNavigationViewModel: ObservableObject {
             }
             return String(format: "%.0f km", km)
         }
+
+        static func == (lhs: Instruction, rhs: Instruction) -> Bool {
+            lhs.id == rhs.id
+                && lhs.distanceRemainingMeters == rhs.distanceRemainingMeters
+                && lhs.text == rhs.text
+                && lhs.systemImage == rhs.systemImage
+                && lhs.targetCoordinate.latitude == rhs.targetCoordinate.latitude
+                && lhs.targetCoordinate.longitude == rhs.targetCoordinate.longitude
+                && lhs.waypointIndex == rhs.waypointIndex
+        }
     }
 
     @Published var instructions: [Instruction] = []
     @Published var currentInstructionIndex: Int = 0
+    @Published var selectedUpcomingOffset: Int = 0
     @Published var distanceKm: Double = 0
     @Published var durationMinutes: Int = 0
     @Published var averageSpeedKmh: Double = 0
@@ -58,6 +70,7 @@ final class MapNavigationViewModel: ObservableObject {
     @Published var startedAt: Date = Date()
     @Published var isPreparingDose = false
     @Published private(set) var latestHeartRateBPM: Double?
+    @Published private(set) var routeHeadingDegrees: Double?
 
     private var rideTracker: RideTracker?
     private var doseSession: LiveRideDoseSession?
@@ -70,6 +83,12 @@ final class MapNavigationViewModel: ObservableObject {
     var currentInstruction: Instruction? {
         guard instructions.indices.contains(currentInstructionIndex) else { return nil }
         return instructions[currentInstructionIndex]
+    }
+
+    var upcomingInstructions: [Instruction] {
+        guard instructions.indices.contains(currentInstructionIndex) else { return [] }
+        let maxEnd = min(instructions.count, currentInstructionIndex + 3)
+        return Array(instructions[currentInstructionIndex..<maxEnd])
     }
 
     func configure(
@@ -112,6 +131,12 @@ final class MapNavigationViewModel: ObservableObject {
         pendingDoseSnapshot = nil
         latestHeartRateBPM = nil
         isUpdatingDose = false
+
+        if route.coordinates.count >= 2 {
+            routeHeadingDegrees = Self.calculateBearing(from: route.coordinates[0], to: route.coordinates[1])
+        } else {
+            routeHeadingDegrees = nil
+        }
 
         let segments = RouteSegmenter().makeSegments(from: route.coordinates)
         guard !segments.isEmpty else {
@@ -156,11 +181,12 @@ final class MapNavigationViewModel: ObservableObject {
                     text: "Arrive at \(destinationTitle)",
                     systemImage: "flag.fill",
                     targetCoordinate: endCoord,
-                    waypointIndex: route.coordinates.count
+                    waypointIndex: max(0, route.coordinates.count - 1)
                 )
             ]
         }
         currentInstructionIndex = 0
+        selectedUpcomingOffset = 0
     }
 
     func process(location: CLLocation) {
@@ -169,6 +195,7 @@ final class MapNavigationViewModel: ObservableObject {
         latestTrackingSnapshot = snapshot
         applyTrackingMetrics(snapshot)
         updateInstructionProgress(with: location)
+        updateRouteHeading(with: location)
         scheduleDoseUpdate(for: snapshot)
     }
 
@@ -214,18 +241,26 @@ final class MapNavigationViewModel: ObservableObject {
     }
 
     func goToPreviousInstruction() {
-        guard currentInstructionIndex > 0 else { return }
-        currentInstructionIndex -= 1
+        if selectedUpcomingOffset > 0 {
+            selectedUpcomingOffset -= 1
+        } else if currentInstructionIndex > 0 {
+            currentInstructionIndex -= 1
+            selectedUpcomingOffset = 0
+        }
     }
 
     func goToNextInstruction() {
-        guard currentInstructionIndex < instructions.count - 1 else { return }
-        currentInstructionIndex += 1
+        if selectedUpcomingOffset < upcomingInstructions.count - 1 {
+            selectedUpcomingOffset += 1
+        } else if currentInstructionIndex < instructions.count - 1 {
+            currentInstructionIndex += 1
+            selectedUpcomingOffset = 0
+        }
     }
 
-    func setInstructionIndex(_ index: Int) {
-        guard instructions.indices.contains(index) else { return }
-        currentInstructionIndex = index
+    func setInstructionOffset(_ offset: Int) {
+        guard upcomingInstructions.indices.contains(offset) else { return }
+        selectedUpcomingOffset = offset
     }
 
     private func applyTrackingMetrics(_ snapshot: RideTrackingSnapshot) {
@@ -248,12 +283,68 @@ final class MapNavigationViewModel: ObservableObject {
         let distanceMeters = location.distance(from: targetLocation)
         instructions[currentInstructionIndex].distanceRemainingMeters = max(0, distanceMeters)
 
-        if distanceMeters < 30 && currentInstructionIndex < instructions.count - 1 {
-            currentInstructionIndex += 1
+        if distanceMeters < 25 && currentInstructionIndex < instructions.count - 1 {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                currentInstructionIndex += 1
+                selectedUpcomingOffset = 0
+            }
             let nextTarget = instructions[currentInstructionIndex].targetCoordinate
             let nextLocation = CLLocation(latitude: nextTarget.latitude, longitude: nextTarget.longitude)
             instructions[currentInstructionIndex].distanceRemainingMeters = max(0, location.distance(from: nextLocation))
         }
+
+        let maxUpcoming = min(instructions.count, currentInstructionIndex + 3)
+        for index in (currentInstructionIndex + 1)..<maxUpcoming {
+            let target = instructions[index].targetCoordinate
+            let stepLocation = CLLocation(latitude: target.latitude, longitude: target.longitude)
+            instructions[index].distanceRemainingMeters = max(0, location.distance(from: stepLocation))
+        }
+    }
+
+    private func updateRouteHeading(with location: CLLocation) {
+        guard routeCoordinates.count >= 2 else { return }
+
+        var closestIndex = 0
+        var minDistance: CLLocationDistance = .greatestFiniteMagnitude
+
+        for i in 0..<(routeCoordinates.count - 1) {
+            let p1 = routeCoordinates[i]
+            let p2 = routeCoordinates[i + 1]
+            let mid = CLLocationCoordinate2D(
+                latitude: (p1.latitude + p2.latitude) / 2,
+                longitude: (p1.longitude + p2.longitude) / 2
+            )
+            let d = location.distance(from: CLLocation(latitude: mid.latitude, longitude: mid.longitude))
+            if d < minDistance {
+                minDistance = d
+                closestIndex = i
+            }
+        }
+
+        let fromCoord = routeCoordinates[closestIndex]
+        let toIndex = min(routeCoordinates.count - 1, closestIndex + 1)
+        let toCoord = routeCoordinates[toIndex]
+
+        let calculatedBearing = Self.calculateBearing(from: fromCoord, to: toCoord)
+        if location.course >= 0 && location.speed > 1.2 {
+            routeHeadingDegrees = location.course
+        } else {
+            routeHeadingDegrees = calculatedBearing
+        }
+    }
+
+    private static func calculateBearing(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D) -> Double {
+        let lat1 = from.latitude * .pi / 180
+        let lon1 = from.longitude * .pi / 180
+        let lat2 = to.latitude * .pi / 180
+        let lon2 = to.longitude * .pi / 180
+
+        let dLon = lon2 - lon1
+        let y = sin(dLon) * cos(lat2)
+        let x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon)
+        let radians = atan2(y, x)
+        let degrees = radians * 180 / .pi
+        return (degrees + 360).truncatingRemainder(dividingBy: 360)
     }
 
     private func scheduleDoseUpdate(for snapshot: RideTrackingSnapshot) {

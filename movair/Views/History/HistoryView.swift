@@ -157,13 +157,8 @@ struct HistoryView: View {
                 .padding(.top, 8)
 
                 ForEach(viewModel.selectedDayTrips) { trip in
-                    Button {
-                        selectedTripForDetail = trip
-                    } label: {
-                        recentTripCard(trip)
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, 16)
+                    recentTripCard(trip)
+                        .padding(.horizontal, 16)
                 }
             }
         }
@@ -187,10 +182,32 @@ struct HistoryView: View {
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .allowsHitTesting(false)
 
-            Text(trip.routeTitle)
-                .font(Font.Brand.bodyBold)
-                .foregroundStyle(Color.primary)
-                .lineLimit(1)
+            HStack(alignment: .top) {
+                Text(trip.routeTitle)
+                    .font(Font.Brand.bodyBold)
+                    .foregroundStyle(Color.primary)
+                    .lineLimit(2)
+
+                Spacer()
+
+                Menu {
+                    Button(role: .destructive) {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            viewModel.deleteTrip(trip)
+                        }
+                    } label: {
+                        Label("Delete Ride", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "trash")
+                        .font(Font.Brand.footnote)
+                        .foregroundStyle(Color.Brand.primaryRed.opacity(0.85))
+                        .padding(6)
+                        .background(Color.Brand.secondaryRed, in: Circle())
+                }
+                .tint(Color.Brand.primaryRed)
+                .accessibilityLabel("Delete ride")
+            }
 
             HStack(spacing: 6) {
                 Text(trip.durationLabel)
@@ -210,6 +227,20 @@ struct HistoryView: View {
         .padding(12)
         .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .shadow(color: .black.opacity(0.06), radius: 10, x: 0, y: 4)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            selectedTripForDetail = trip
+        }
+        .contextMenu {
+            Button(role: .destructive) {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    viewModel.deleteTrip(trip)
+                }
+            } label: {
+                Label("Delete Ride", systemImage: "trash")
+            }
+        }
+        .tint(Color.Brand.primaryRed)
     }
 
     private var highlightsSection: some View {

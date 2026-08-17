@@ -13,6 +13,11 @@ struct MapViewComponent: UIViewRepresentable {
     var routeEdgePadding: UIEdgeInsets = UIEdgeInsets(top: 120, left: 40, bottom: 280, right: 40)
     var showsOriginMarker: Bool = false
     var isInteractionEnabled: Bool = true
+    var isNavigationTracking: Bool = false
+    var userHeading: CLHeading?
+    var routeHeading: Double?
+    var navigationAltitude: CLLocationDistance = 200
+    var navigationPitch: CGFloat = 55
 
     private static let defaultRegion = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: -6.2088, longitude: 106.8456),
@@ -46,6 +51,11 @@ struct MapViewComponent: UIViewRepresentable {
         updateOverlays(on: mapView)
         updateAnnotations(on: mapView)
 
+        if isNavigationTracking {
+            updateNavigationCamera(on: mapView, context: context)
+            return
+        }
+
         let routeKey = Self.routeKey(routeCoordinates)
 
         if fitsRouteInView, routeCoordinates.count >= 2 {
@@ -72,6 +82,68 @@ struct MapViewComponent: UIViewRepresentable {
                 mapView.setRegion(region, animated: true)
             }
             DispatchQueue.main.async { recenterTrigger = false }
+        }
+    }
+
+    private func updateNavigationCamera(on mapView: MKMapView, context: Context) {
+        guard let centerCoordinate else { return }
+
+        let headingValue: Double = {
+            if let routeHeading {
+                return routeHeading
+            }
+            if let heading = userHeading {
+                let deg = heading.trueHeading >= 0 ? heading.trueHeading : heading.magneticHeading
+                if deg >= 0 { return deg }
+            }
+            return mapView.camera.heading
+        }()
+
+        let isInitial = !context.coordinator.hasCenteredNavigation
+        let shouldForceUpdate = recenterTrigger || isInitial
+
+        if shouldForceUpdate {
+            let camera = MKMapCamera(
+                lookingAtCenter: centerCoordinate,
+                fromDistance: navigationAltitude,
+                pitch: navigationPitch,
+                heading: headingValue
+            )
+            mapView.setCamera(camera, animated: !isInitial)
+            context.coordinator.hasCenteredNavigation = true
+            context.coordinator.userHasDraggedMap = false
+            context.coordinator.lastAppliedHeading = headingValue
+            context.coordinator.lastAppliedCenter = centerCoordinate
+            if recenterTrigger {
+                DispatchQueue.main.async { recenterTrigger = false }
+            }
+            return
+        }
+
+        if !context.coordinator.userHasDraggedMap {
+            let lastHeading = context.coordinator.lastAppliedHeading
+            let diff = abs(headingValue - lastHeading)
+            let normalizedDiff = min(diff, 360 - diff)
+
+            let lastCenter = context.coordinator.lastAppliedCenter
+            let centerMoved: Bool = {
+                guard let lastCenter else { return true }
+                let l1 = CLLocation(latitude: lastCenter.latitude, longitude: lastCenter.longitude)
+                let l2 = CLLocation(latitude: centerCoordinate.latitude, longitude: centerCoordinate.longitude)
+                return l1.distance(from: l2) >= 3
+            }()
+
+            if normalizedDiff >= 3 || centerMoved {
+                let camera = MKMapCamera(
+                    lookingAtCenter: centerCoordinate,
+                    fromDistance: navigationAltitude,
+                    pitch: navigationPitch,
+                    heading: headingValue
+                )
+                mapView.setCamera(camera, animated: true)
+                context.coordinator.lastAppliedHeading = headingValue
+                context.coordinator.lastAppliedCenter = centerCoordinate
+            }
         }
     }
 
@@ -145,10 +217,24 @@ struct MapViewComponent: UIViewRepresentable {
     final class Coordinator: NSObject, MKMapViewDelegate {
         var parent: MapViewComponent
         var hasCenteredOnce = false
+        var hasCenteredNavigation = false
         var lastFittedRouteKey: String = ""
+        var userHasDraggedMap = false
+        var lastAppliedHeading: Double = 0
+        var lastAppliedCenter: CLLocationCoordinate2D?
 
         init(parent: MapViewComponent) {
             self.parent = parent
+        }
+
+        func mapView(_ mapView: MKMapView, regionWillChangeAnimated animated: Bool) {
+            let view = mapView.subviews.first
+            if let gestureRecognizers = view?.gestureRecognizers {
+                for recognizer in gestureRecognizers where recognizer.state == .began || recognizer.state == .changed {
+                    userHasDraggedMap = true
+                    break
+                }
+            }
         }
 
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
