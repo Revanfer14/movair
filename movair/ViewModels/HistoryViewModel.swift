@@ -15,6 +15,10 @@ final class HistoryViewModel: ObservableObject {
         rebuildWeek(around: Date())
     }
 
+    var selectedDayTrips: [TripSummary] {
+        store.trips(for: selectedDate)
+    }
+
     var selectedDayExposure: Int {
         store.exposure(for: selectedDate) ?? 0
     }
@@ -37,8 +41,7 @@ final class HistoryViewModel: ObservableObject {
     }
 
     var latestTrip: TripSummary? {
-        store.trips(forWeekContaining: selectedDate).first
-            ?? store.trips.first
+        selectedDayTrips.first ?? store.trips.first
     }
 
     var highlights: [HistoryHighlight] {

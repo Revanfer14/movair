@@ -7,11 +7,12 @@ struct MapViewComponent: UIViewRepresentable {
     var centerCoordinate: CLLocationCoordinate2D?
     var showsUserLocation: Bool = true
     var routeCoordinates: [CLLocationCoordinate2D] = []
-    var originCoordinate: CLLocationCoordinate2D? = nil
-    var destinationCoordinate: CLLocationCoordinate2D? = nil
+    var originCoordinate: CLLocationCoordinate2D?
+    var destinationCoordinate: CLLocationCoordinate2D?
     var fitsRouteInView: Bool = false
     var routeEdgePadding: UIEdgeInsets = UIEdgeInsets(top: 120, left: 40, bottom: 280, right: 40)
     var showsOriginMarker: Bool = false
+    var isInteractionEnabled: Bool = true
 
     private static let defaultRegion = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: -6.2088, longitude: 106.8456),
@@ -26,12 +27,20 @@ struct MapViewComponent: UIViewRepresentable {
         mapView.showsUserLocation = showsUserLocation
         mapView.showsCompass = false
         mapView.pointOfInterestFilter = .includingAll
+        mapView.isScrollEnabled = isInteractionEnabled
+        mapView.isZoomEnabled = isInteractionEnabled
+        mapView.isPitchEnabled = isInteractionEnabled
+        mapView.isRotateEnabled = isInteractionEnabled
         mapView.setRegion(Self.defaultRegion, animated: false)
         return mapView
     }
 
     func updateUIView(_ mapView: MKMapView, context: Context) {
         mapView.showsUserLocation = showsUserLocation
+        mapView.isScrollEnabled = isInteractionEnabled
+        mapView.isZoomEnabled = isInteractionEnabled
+        mapView.isPitchEnabled = isInteractionEnabled
+        mapView.isRotateEnabled = isInteractionEnabled
         context.coordinator.parent = self
 
         updateOverlays(on: mapView)
@@ -40,7 +49,6 @@ struct MapViewComponent: UIViewRepresentable {
         let routeKey = Self.routeKey(routeCoordinates)
 
         if fitsRouteInView, routeCoordinates.count >= 2 {
-            // Only refit when the route geometry actually changes — never on every SwiftUI refresh / pan.
             if routeKey != context.coordinator.lastFittedRouteKey {
                 fitRoute(on: mapView)
                 context.coordinator.lastFittedRouteKey = routeKey
@@ -104,8 +112,16 @@ struct MapViewComponent: UIViewRepresentable {
             let pointRect = MKMapRect(x: point.x, y: point.y, width: 0.1, height: 0.1)
             rect = rect.union(pointRect)
         }
+        if let originCoordinate {
+            let point = MKMapPoint(originCoordinate)
+            rect = rect.union(MKMapRect(x: point.x, y: point.y, width: 0.1, height: 0.1))
+        }
+        if let destinationCoordinate {
+            let point = MKMapPoint(destinationCoordinate)
+            rect = rect.union(MKMapRect(x: point.x, y: point.y, width: 0.1, height: 0.1))
+        }
         guard !rect.isNull, !rect.isEmpty else { return }
-        mapView.setVisibleMapRect(rect, edgePadding: routeEdgePadding, animated: true)
+        mapView.setVisibleMapRect(rect, edgePadding: routeEdgePadding, animated: false)
     }
 
     private static func routeKey(_ coordinates: [CLLocationCoordinate2D]) -> String {

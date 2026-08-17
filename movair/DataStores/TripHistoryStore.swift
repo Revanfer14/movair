@@ -54,6 +54,11 @@ final class TripHistoryStore: ObservableObject {
         return trips.filter { interval.contains($0.completedAt) }
     }
 
+    func trips(for day: Date) -> [TripSummary] {
+        let calendar = Calendar.current
+        return trips.filter { calendar.isDate($0.completedAt, inSameDayAs: day) }
+    }
+
     func exposure(for day: Date) -> Int? {
         let calendar = Calendar.current
         let dayTrips = trips.filter { calendar.isDate($0.completedAt, inSameDayAs: day) }

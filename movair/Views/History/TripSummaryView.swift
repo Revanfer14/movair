@@ -34,7 +34,7 @@ struct TripSummaryView: View {
         .toolbar(.hidden, for: .tabBar)
     }
 
-   private var headerSection: some View {
+    private var headerSection: some View {
         VStack(spacing: 0) {
             VStack(spacing: 8) {
                 Text("Trip Summary")
@@ -106,7 +106,7 @@ struct TripSummaryView: View {
                     size: 120
                 )
 
-                Text("of your daily exposure\nused on this ride")
+                Text("of your daily exposure used on this ride")
                     .font(Font.Brand.footnote)
                     .foregroundStyle(Color.Brand.darkgray)
                     .multilineTextAlignment(.center)
@@ -150,8 +150,11 @@ struct TripSummaryView: View {
                 centerCoordinate: trip.coordinates.first,
                 showsUserLocation: false,
                 routeCoordinates: trip.coordinates,
+                originCoordinate: trip.coordinates.first,
                 destinationCoordinate: trip.coordinates.last,
-                fitsRouteInView: true
+                fitsRouteInView: true,
+                routeEdgePadding: UIEdgeInsets(top: 24, left: 24, bottom: 24, right: 24),
+                showsOriginMarker: true
             )
             .frame(height: 224)
             .frame(maxWidth: .infinity)
