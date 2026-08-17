@@ -1,6 +1,11 @@
 import SwiftUI
 import MapKit
 
+final class RoutePolyline: MKPolyline, @unchecked Sendable {
+    var routeID: UUID = UUID()
+    var isSelected: Bool = false
+}
+
 struct MapViewComponent: UIViewRepresentable {
     @Binding var recenterTrigger: Bool
 
@@ -18,6 +23,9 @@ struct MapViewComponent: UIViewRepresentable {
     var routeHeading: Double?
     var navigationAltitude: CLLocationDistance = 200
     var navigationPitch: CGFloat = 55
+    var routeOptions: [RouteOption] = []
+    var selectedRouteID: UUID?
+    var onSelectRouteID: ((UUID) -> Void)?
 
     private static let defaultRegion = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: -6.2088, longitude: 106.8456),
@@ -37,6 +45,11 @@ struct MapViewComponent: UIViewRepresentable {
         mapView.isPitchEnabled = isInteractionEnabled
         mapView.isRotateEnabled = isInteractionEnabled
         mapView.setRegion(Self.defaultRegion, animated: false)
+
+        let tapGesture = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleMapTap(_:)))
+        tapGesture.cancelsTouchesInView = false
+        mapView.addGestureRecognizer(tapGesture)
+
         return mapView
     }
 
@@ -56,9 +69,9 @@ struct MapViewComponent: UIViewRepresentable {
             return
         }
 
-        let routeKey = Self.routeKey(routeCoordinates)
+        let routeKey = effectiveRouteKey()
 
-        if fitsRouteInView, routeCoordinates.count >= 2 {
+        if fitsRouteInView && hasValidRoutesToFit() {
             if routeKey != context.coordinator.lastFittedRouteKey {
                 fitRoute(on: mapView)
                 context.coordinator.lastFittedRouteKey = routeKey
@@ -74,7 +87,7 @@ struct MapViewComponent: UIViewRepresentable {
         }
 
         if recenterTrigger {
-            if fitsRouteInView, routeCoordinates.count >= 2 {
+            if fitsRouteInView && hasValidRoutesToFit() {
                 fitRoute(on: mapView)
                 context.coordinator.lastFittedRouteKey = routeKey
             } else if let centerCoordinate {
@@ -149,9 +162,27 @@ struct MapViewComponent: UIViewRepresentable {
 
     private func updateOverlays(on mapView: MKMapView) {
         mapView.removeOverlays(mapView.overlays)
-        guard routeCoordinates.count >= 2 else { return }
-        let polyline = MKPolyline(coordinates: routeCoordinates, count: routeCoordinates.count)
-        mapView.addOverlay(polyline)
+
+        if !routeOptions.isEmpty {
+            let unselectedRoutes = routeOptions.filter { $0.id != selectedRouteID }
+            for route in unselectedRoutes {
+                guard route.coordinates.count >= 2 else { continue }
+                let polyline = RoutePolyline(coordinates: route.coordinates, count: route.coordinates.count)
+                polyline.routeID = route.id
+                polyline.isSelected = false
+                mapView.addOverlay(polyline)
+            }
+
+            if let selectedRoute = routeOptions.first(where: { $0.id == selectedRouteID }), selectedRoute.coordinates.count >= 2 {
+                let polyline = RoutePolyline(coordinates: selectedRoute.coordinates, count: selectedRoute.coordinates.count)
+                polyline.routeID = selectedRoute.id
+                polyline.isSelected = true
+                mapView.addOverlay(polyline)
+            }
+        } else if routeCoordinates.count >= 2 {
+            let polyline = MKPolyline(coordinates: routeCoordinates, count: routeCoordinates.count)
+            mapView.addOverlay(polyline)
+        }
     }
 
     private func updateAnnotations(on mapView: MKMapView) {
@@ -177,13 +208,32 @@ struct MapViewComponent: UIViewRepresentable {
         }
     }
 
+    private func hasValidRoutesToFit() -> Bool {
+        if !routeOptions.isEmpty {
+            return routeOptions.contains { $0.coordinates.count >= 2 }
+        }
+        return routeCoordinates.count >= 2
+    }
+
     private func fitRoute(on mapView: MKMapView) {
         var rect = MKMapRect.null
-        for coordinate in routeCoordinates {
-            let point = MKMapPoint(coordinate)
-            let pointRect = MKMapRect(x: point.x, y: point.y, width: 0.1, height: 0.1)
-            rect = rect.union(pointRect)
+
+        if !routeOptions.isEmpty {
+            for route in routeOptions {
+                for coordinate in route.coordinates {
+                    let point = MKMapPoint(coordinate)
+                    let pointRect = MKMapRect(x: point.x, y: point.y, width: 0.1, height: 0.1)
+                    rect = rect.union(pointRect)
+                }
+            }
+        } else {
+            for coordinate in routeCoordinates {
+                let point = MKMapPoint(coordinate)
+                let pointRect = MKMapRect(x: point.x, y: point.y, width: 0.1, height: 0.1)
+                rect = rect.union(pointRect)
+            }
         }
+
         if let originCoordinate {
             let point = MKMapPoint(originCoordinate)
             rect = rect.union(MKMapRect(x: point.x, y: point.y, width: 0.1, height: 0.1))
@@ -196,14 +246,18 @@ struct MapViewComponent: UIViewRepresentable {
         mapView.setVisibleMapRect(rect, edgePadding: routeEdgePadding, animated: false)
     }
 
-    private static func routeKey(_ coordinates: [CLLocationCoordinate2D]) -> String {
-        guard !coordinates.isEmpty else { return "empty" }
-        let first = coordinates.first!
-        let last = coordinates.last!
-        let mid = coordinates[coordinates.count / 2]
+    private func effectiveRouteKey() -> String {
+        if !routeOptions.isEmpty {
+            let ids = routeOptions.map(\.id.uuidString).joined(separator: "_")
+            return "\(ids)_\(selectedRouteID?.uuidString ?? "none")"
+        }
+        guard !routeCoordinates.isEmpty else { return "empty" }
+        let first = routeCoordinates.first!
+        let last = routeCoordinates.last!
+        let mid = routeCoordinates[routeCoordinates.count / 2]
         return String(
             format: "%d_%.5f,%.5f_%.5f,%.5f_%.5f,%.5f",
-            coordinates.count,
+            routeCoordinates.count,
             first.latitude, first.longitude,
             mid.latitude, mid.longitude,
             last.latitude, last.longitude
@@ -227,6 +281,68 @@ struct MapViewComponent: UIViewRepresentable {
             self.parent = parent
         }
 
+        @objc func handleMapTap(_ recognizer: UITapGestureRecognizer) {
+            guard let mapView = recognizer.view as? MKMapView else { return }
+            guard !parent.routeOptions.isEmpty else { return }
+
+            let touchPoint = recognizer.location(in: mapView)
+            let touchCoord = mapView.convert(touchPoint, toCoordinateFrom: mapView)
+
+            var bestRouteID: UUID?
+            var minDistance: Double = .greatestFiniteMagnitude
+
+            for route in parent.routeOptions {
+                let d = distanceToPolyline(coordinate: touchCoord, coordinates: route.coordinates, in: mapView)
+                if d < minDistance {
+                    minDistance = d
+                    bestRouteID = route.id
+                }
+            }
+
+            if let bestRouteID, minDistance <= 35 {
+                if bestRouteID != parent.selectedRouteID {
+                    parent.onSelectRouteID?(bestRouteID)
+                }
+            }
+        }
+
+        private func distanceToPolyline(coordinate: CLLocationCoordinate2D, coordinates: [CLLocationCoordinate2D], in mapView: MKMapView) -> Double {
+            guard coordinates.count >= 2 else { return .greatestFiniteMagnitude }
+            let pPoint = mapView.convert(coordinate, toPointTo: mapView)
+            var minScreenDistance = Double.greatestFiniteMagnitude
+
+            for i in 0..<(coordinates.count - 1) {
+                let pt1 = mapView.convert(coordinates[i], toPointTo: mapView)
+                let pt2 = mapView.convert(coordinates[i + 1], toPointTo: mapView)
+                let d = pointToSegmentScreenDistance(point: pPoint, p1: pt1, p2: pt2)
+                if d < minScreenDistance {
+                    minScreenDistance = d
+                }
+            }
+            return minScreenDistance
+        }
+
+        private func pointToSegmentScreenDistance(point: CGPoint, p1: CGPoint, p2: CGPoint) -> Double {
+            let dx = p2.x - p1.x
+            let dy = p2.y - p1.y
+            let lengthSquared = dx * dx + dy * dy
+            if lengthSquared == 0 {
+                return hypot(Double(point.x - p1.x), Double(point.y - p1.y))
+            }
+            let t = max(0, min(1, ((point.x - p1.x) * dx + (point.y - p1.y) * dy) / lengthSquared))
+            let projX = p1.x + t * dx
+            let projY = p1.y + t * dy
+            return hypot(Double(point.x - projX), Double(point.y - projY))
+        }
+
+        func mapView(_ mapView: MKMapView, didChange mode: MKUserTrackingMode, animated: Bool) {
+            if mode == .none {
+                userHasDraggedMap = true
+            } else {
+                userHasDraggedMap = false
+            }
+        }
+
         func mapView(_ mapView: MKMapView, regionWillChangeAnimated animated: Bool) {
             let view = mapView.subviews.first
             if let gestureRecognizers = view?.gestureRecognizers {
@@ -238,10 +354,24 @@ struct MapViewComponent: UIViewRepresentable {
         }
 
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+            if let routePolyline = overlay as? RoutePolyline {
+                let renderer = MKPolylineRenderer(polyline: routePolyline)
+                if routePolyline.isSelected {
+                    renderer.strokeColor = UIColor(Color.Brand.blue600)
+                    renderer.lineWidth = 6.5
+                } else {
+                    renderer.strokeColor = UIColor(Color.Brand.blue600.opacity(0.38))
+                    renderer.lineWidth = 5.5
+                }
+                renderer.lineCap = .round
+                renderer.lineJoin = .round
+                return renderer
+            }
+
             if let polyline = overlay as? MKPolyline {
                 let renderer = MKPolylineRenderer(polyline: polyline)
                 renderer.strokeColor = UIColor(Color.Brand.blue600)
-                renderer.lineWidth = 5
+                renderer.lineWidth = 5.5
                 renderer.lineCap = .round
                 renderer.lineJoin = .round
                 return renderer

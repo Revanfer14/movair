@@ -69,6 +69,7 @@ final class MapNavigationViewModel: ObservableObject {
     @Published var destinationTitle: String = "Destination"
     @Published var startedAt: Date = Date()
     @Published var isPreparingDose = false
+    @Published var hasArrivedAtDestination: Bool = false
     @Published private(set) var latestHeartRateBPM: Double?
     @Published private(set) var routeHeadingDegrees: Double?
 
@@ -130,6 +131,7 @@ final class MapNavigationViewModel: ObservableObject {
         latestTrackingSnapshot = nil
         pendingDoseSnapshot = nil
         latestHeartRateBPM = nil
+        hasArrivedAtDestination = false
         isUpdatingDose = false
 
         if route.coordinates.count >= 2 {
@@ -298,6 +300,25 @@ final class MapNavigationViewModel: ObservableObject {
             let target = instructions[index].targetCoordinate
             let stepLocation = CLLocation(latitude: target.latitude, longitude: target.longitude)
             instructions[index].distanceRemainingMeters = max(0, location.distance(from: stepLocation))
+        }
+
+        checkDestinationArrival(with: location)
+    }
+
+    private func checkDestinationArrival(with location: CLLocation) {
+        guard !hasArrivedAtDestination else { return }
+
+        if let dest = destinationCoordinate {
+            let destLoc = CLLocation(latitude: dest.latitude, longitude: dest.longitude)
+            let distanceToDestination = location.distance(from: destLoc)
+            if distanceToDestination <= 40 {
+                hasArrivedAtDestination = true
+                return
+            }
+        }
+
+        if currentInstructionIndex == instructions.count - 1 && instructions[currentInstructionIndex].distanceRemainingMeters <= 30 {
+            hasArrivedAtDestination = true
         }
     }
 
