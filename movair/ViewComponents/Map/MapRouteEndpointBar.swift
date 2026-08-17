@@ -3,25 +3,41 @@ import SwiftUI
 struct MapRouteEndpointBar: View {
     let originTitle: String
     let destinationTitle: String
+    var onEditOrigin: (() -> Void)? = nil
+    var onEditDestination: (() -> Void)? = nil
     var onSwap: (() -> Void)? = nil
 
     var body: some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 0) {
-                endpointRow(
-                    icon: "location.circle.fill",
-                    iconColor: Color.Brand.blue600,
-                    title: originTitle
-                )
+                Button {
+                    onEditOrigin?()
+                } label: {
+                    endpointRow(
+                        icon: "location.circle.fill",
+                        iconColor: Color.Brand.blue600,
+                        title: originTitle
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Edit origin")
+                .accessibilityValue(originTitle)
 
                 Divider()
                     .padding(.vertical, 12)
 
-                endpointRow(
-                    icon: "mappin.and.ellipse",
-                    iconColor: Color.Brand.blue600,
-                    title: destinationTitle
-                )
+                Button {
+                    onEditDestination?()
+                } label: {
+                    endpointRow(
+                        icon: "mappin.and.ellipse",
+                        iconColor: Color.Brand.blue600,
+                        title: destinationTitle
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Edit destination")
+                .accessibilityValue(destinationTitle)
             }
 
             Button {
@@ -54,13 +70,17 @@ struct MapRouteEndpointBar: View {
                 .lineLimit(1)
             Spacer(minLength: 0)
         }
+        .contentShape(Rectangle())
     }
 }
 
 #Preview {
     MapRouteEndpointBar(
         originTitle: "Current location",
-        destinationTitle: "BXChange Mall"
+        destinationTitle: "BXChange Mall",
+        onEditOrigin: {},
+        onEditDestination: {},
+        onSwap: {}
     )
     .padding()
 }

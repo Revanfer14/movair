@@ -3,7 +3,7 @@ import MapKit
 
 struct HistoryView: View {
     @StateObject private var viewModel = HistoryViewModel()
-    @State private var recenterTrigger = false
+    @State private var selectedTripForDetail: TripSummary?
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -13,11 +13,7 @@ struct HistoryView: View {
                     .padding(.horizontal, 16)
                     .offset(y: -24)
 
-                if let trip = viewModel.latestTrip {
-                    recentTripCard(trip)
-                        .padding(.horizontal, 16)
-                        .padding(.top, 8)
-                }
+                ridesSection
 
                 highlightsSection
                     .padding(.horizontal, 16)
@@ -31,6 +27,11 @@ struct HistoryView: View {
         }
         .background(Color(.systemGroupedBackground))
         .ignoresSafeArea(edges: .top)
+        .sheet(item: $selectedTripForDetail) { trip in
+            TripSummaryView(trip: trip) {
+                selectedTripForDetail = nil
+            }
+        }
         .onAppear {
             viewModel.rebuildWeek(around: Date())
         }
@@ -40,14 +41,17 @@ struct HistoryView: View {
     }
 
     private var header: some View {
-        ZStack(alignment: .topTrailing) {
+        ZStack(alignment: .bottomTrailing) {
             Color.Brand.blue900
 
-            Image(systemName: "bicycle")
-                .font(.system(size: 72, weight: .ultraLight))
-                .foregroundStyle(Color.Brand.white.opacity(0.25))
-                .padding(.trailing, 20)
-                .padding(.top, 48)
+            Image("HistoryHeaderBanner")
+                .resizable()
+                .scaledToFit()
+                .frame(maxWidth: 220)
+                .padding(.trailing, -20)
+                .padding(.bottom, 28)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Your")
@@ -121,18 +125,67 @@ struct HistoryView: View {
         }
     }
 
+    @ViewBuilder
+    private var ridesSection: some View {
+        if viewModel.selectedDayTrips.isEmpty {
+            VStack(spacing: 8) {
+                Image(systemName: "bicycle")
+                    .font(.system(size: 28))
+                    .foregroundStyle(Color.Brand.darkgray.opacity(0.6))
+                Text("No rides on this day")
+                    .font(Font.Brand.bodyBold)
+                    .foregroundStyle(Color.Brand.darkgray)
+                Text("Completed rides will appear here")
+                    .font(Font.Brand.footnote)
+                    .foregroundStyle(Color.Brand.darkgray.opacity(0.8))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 24)
+            .padding(.horizontal, 16)
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+        } else {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text(viewModel.selectedDayTrips.count == 1 ? "Your Ride" : "Your Rides (\(viewModel.selectedDayTrips.count))")
+                        .font(Font.Brand.title2Bold)
+                        .foregroundStyle(Color.Brand.labelPrimary)
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+
+                ForEach(viewModel.selectedDayTrips) { trip in
+                    Button {
+                        selectedTripForDetail = trip
+                    } label: {
+                        recentTripCard(trip)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 16)
+                }
+            }
+        }
+    }
+
     private func recentTripCard(_ trip: TripSummary) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             MapViewComponent(
-                recenterTrigger: $recenterTrigger,
+                recenterTrigger: .constant(false),
                 centerCoordinate: trip.coordinates.first,
                 showsUserLocation: false,
                 routeCoordinates: trip.coordinates,
+                originCoordinate: trip.coordinates.first,
                 destinationCoordinate: trip.coordinates.last,
-                fitsRouteInView: true
+                fitsRouteInView: true,
+                routeEdgePadding: UIEdgeInsets(top: 18, left: 18, bottom: 18, right: 18),
+                showsOriginMarker: true,
+                isInteractionEnabled: false
             )
             .frame(height: 120)
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .allowsHitTesting(false)
 
             Text(trip.routeTitle)
                 .font(Font.Brand.bodyBold)

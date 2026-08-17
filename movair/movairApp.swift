@@ -9,6 +9,8 @@ import SwiftUI
 
 @main
 struct movairApp: App {
+    @StateObject private var phoneConnectivity = PhoneConnectivityManager.shared
+
     var body: some Scene {
         WindowGroup {
             AppTabView()

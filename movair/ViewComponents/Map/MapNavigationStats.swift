@@ -7,20 +7,48 @@ struct MapNavigationStats: View {
     let averageSpeedKmh: Double
     let accumulatedExposureUg: Int
     let exposureLevel: ExposureLevel
-    var onPause: (() -> Void)? = nil
-    var onResume: (() -> Void)? = nil
-    var onFinish: (() -> Void)? = nil
+    let isOffRoute: Bool
+    let unattributedDurationMinutes: Int
+    var onPause: (() -> Void)?
+    var onResume: (() -> Void)?
+    var onFinish: (() -> Void)?
+
+    init(
+        mode: NavigationMode,
+        distanceKm: Double,
+        durationMinutes: Int,
+        averageSpeedKmh: Double,
+        accumulatedExposureUg: Int,
+        exposureLevel: ExposureLevel,
+        isOffRoute: Bool = false,
+        unattributedDurationMinutes: Int = 0,
+        onPause: (() -> Void)? = nil,
+        onResume: (() -> Void)? = nil,
+        onFinish: (() -> Void)? = nil
+    ) {
+        self.mode = mode
+        self.distanceKm = distanceKm
+        self.durationMinutes = durationMinutes
+        self.averageSpeedKmh = averageSpeedKmh
+        self.accumulatedExposureUg = accumulatedExposureUg
+        self.exposureLevel = exposureLevel
+        self.isOffRoute = isOffRoute
+        self.unattributedDurationMinutes = unattributedDurationMinutes
+        self.onPause = onPause
+        self.onResume = onResume
+        self.onFinish = onFinish
+    }
 
     var body: some View {
         VStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Estimated Exposure")
+                Text("Measured Exposure")
                     .font(Font.Brand.footnote)
                     .foregroundStyle(Color.Brand.darkgray)
 
                 HStack(spacing: 8) {
                     ExposureBadge(level: exposureLevel, showsAqi: true, badgeSize: "big")
-                    
+
                     Circle()
                         .fill(Color.Brand.darkgray.opacity(0.6))
                         .frame(width: 6, height: 6)
@@ -36,35 +64,43 @@ struct MapNavigationStats: View {
                             .foregroundStyle(Color.Brand.darkgray)
                     }
                 }
+
+                if isOffRoute {
+                    Text("Off route — time not counted in dose")
+                        .font(Font.Brand.footnote)
+                        .foregroundStyle(Color.Brand.primaryOrange)
+                } else if unattributedDurationMinutes > 0 {
+                    Text("\(unattributedDurationMinutes) min off route excluded")
+                        .font(Font.Brand.footnote)
+                        .foregroundStyle(Color.Brand.darkgray)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(16)
             .background(Color(.secondarySystemGroupedBackground))
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
 
-            // Metrics
             HStack(spacing: 0) {
                 metric(value: String(format: "%.0f km", distanceKm), label: "Distance")
                     .frame(maxWidth: .infinity)
-                
+
                 Spacer()
                 Divider()
                     .frame(height: 54)
                 Spacer()
-                
+
                 metric(value: "\(durationMinutes) min", label: "Time")
                     .frame(maxWidth: .infinity)
-                
+
                 Spacer()
                 Divider()
                     .frame(height: 54)
                 Spacer()
-                
+
                 metric(value: String(format: "%.0f km/h", averageSpeedKmh), label: "Avg speed")
                     .frame(maxWidth: .infinity)
             }
 
-            // Actions
             if mode == .active {
                 PrimaryButton(title: "Pause", action: { onPause?() })
             } else {

@@ -9,7 +9,7 @@ struct ActiveNavigationView: View {
     var onPause: () -> Void
     var onResume: () -> Void
     var onFinish: () -> Void
-    var onBack: () -> Void
+    var onBack: (() -> Void)?
 
     @State private var recenterTrigger = false
 
@@ -20,19 +20,22 @@ struct ActiveNavigationView: View {
                 centerCoordinate: locationManager.userLocation,
                 showsUserLocation: true,
                 routeCoordinates: viewModel.routeCoordinates,
-                destinationCoordinate: viewModel.routeCoordinates.last,
-                fitsRouteInView: true
+                originCoordinate: viewModel.originCoordinate,
+                destinationCoordinate: viewModel.destinationCoordinate,
+                fitsRouteInView: true,
+                routeEdgePadding: UIEdgeInsets(top: 120, left: 40, bottom: 280, right: 40),
+                showsOriginMarker: true
             )
             .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                if let instruction = viewModel.currentInstruction {
+                if !viewModel.instructions.isEmpty {
                     MapNavigationBanner(
-                        distanceKm: instruction.distanceKm,
-                        instruction: instruction.text,
-                        pageCount: viewModel.instructions.count,
-                        currentPage: viewModel.currentInstructionIndex,
-                        onBack: onBack
+                        instructions: viewModel.instructions,
+                        currentIndex: Binding(
+                            get: { viewModel.currentInstructionIndex },
+                            set: { viewModel.setInstructionIndex($0) }
+                        )
                     )
                     .padding(.horizontal, 16)
                     .padding(.top, 8)
@@ -49,6 +52,8 @@ struct ActiveNavigationView: View {
                     averageSpeedKmh: viewModel.averageSpeedKmh,
                     accumulatedExposureUg: viewModel.accumulatedExposureUg,
                     exposureLevel: viewModel.exposureLevel,
+                    isOffRoute: viewModel.isOffRoute,
+                    unattributedDurationMinutes: viewModel.unattributedDurationMinutes,
                     onPause: onPause,
                     onResume: onResume,
                     onFinish: onFinish
@@ -89,30 +94,31 @@ struct ActiveNavigationView: View {
 
 #Preview {
     let vm = MapNavigationViewModel()
-    vm.configure(
-        with: RouteOption(
-            title: "Cleaner Route",
-            distanceKm: 14,
-            durationMinutes: 37,
-            exposureRangeUg: 100...120,
-            exposureLevel: .low,
-            pollutionDeltaPercent: -10,
-            isRecommended: true,
-            coordinates: [
-                CLLocationCoordinate2D(latitude: -6.29, longitude: 106.64),
-                CLLocationCoordinate2D(latitude: -6.30, longitude: 106.65)
-            ]
-        ),
-        originTitle: "Current location",
-        destinationTitle: "BXChange Mall"
-    )
-    return ActiveNavigationView(
+    ActiveNavigationView(
         viewModel: vm,
         locationManager: LocationManager(),
         isPaused: false,
         onPause: {},
         onResume: {},
-        onFinish: {},
-        onBack: {}
+        onFinish: {}
     )
+    .task {
+        try? await vm.configure(
+            with: RouteOption(
+                title: "Cleaner Route",
+                distanceKm: 14,
+                durationMinutes: 37,
+                exposureRangeUg: 100...120,
+                exposureLevel: .low,
+                pollutionDeltaPercent: -10,
+                isRecommended: true,
+                coordinates: [
+                    CLLocationCoordinate2D(latitude: -6.29, longitude: 106.64),
+                    CLLocationCoordinate2D(latitude: -6.30, longitude: 106.65)
+                ]
+            ),
+            originTitle: "Current location",
+            destinationTitle: "BXChange Mall"
+        )
+    }
 }

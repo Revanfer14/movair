@@ -43,9 +43,60 @@ tᵢ         = planning : ETA_total_ORS × (distanceᵢ / Σ distance)
 | ---- | ----------------------------- | --------------------------- | ------------------------------ |
 | `VE` | Laju ventilasi saat bersepeda | **0.040 m³/min (40 L/min)** | Fallback yang dipakai sekarang |
 
-- Nilai ini dipakai **sekarang dan seterusnya sebagai fallback** kalau data heart rate gak tersedia.
-- Idealnya `VE` dihitung per-individu dari heart rate (HealthKit). Rumusnya **belum ditetapkan** — jangan dikarang, jangan diimplementasi setengah-setengah. Sampai rumusnya ada, konstanta ini yang berlaku.
-- Desain kode: protokol `VentilationRateProvider`, implementasi `ConstantVentilationRate` mengembalikan 0.040. Versi berbasis HR nyusul sebagai implementasi kedua tanpa nyentuh `DoseCalculator`.
+- Nilai ini dipakai **sekarang dan seterusnya sebagai fallback** kalau data heart rate gak tersedia (HealthKit gak diotorisasi, Apple Watch gak kepasang, atau salah satu input formula §2.1.1 gak lengkap).
+- Idealnya `VE` dihitung per-individu dari heart rate (HealthKit). Rumusnya **udah dipilih** — lihat §2.1.1 — tapi **belum diimplementasi di kode**. Sampai diimplementasi, konstanta ini yang berlaku.
+- Desain kode: protokol `VentilationRateProvider`, implementasi `ConstantVentilationRate` mengembalikan 0.040. Versi berbasis HR (§2.1.1) nyusul sebagai implementasi kedua tanpa nyentuh `DoseCalculator`.
+
+### 2.1.1 Formula HR-based — Greenwald et al. 2019 (dipilih, belum diimplementasi)
+
+```
+V̇E = exp(-9.59) × HR^2.39 × age^0.274 × sex^-0.204 × FVC^0.520
+```
+
+| Var | Asal | Catatan |
+| --- | --- | --- |
+| `HR` | HealthKit, live, dari `HKWorkoutSession` + `HKLiveWorkoutBuilder` | bpm, real-time selama ride |
+| `age` | HealthKit `dateOfBirth` | tahun |
+| `sex` | HealthKit `biologicalSex` | **1 = pria, 2 = wanita** (encoding asli paper, bukan pilihan kita). `.other`/`.notSet`/gak diotorisasi → **default ke 1 (pria)** — keputusan produk, dicatat di sini, bukan di kode |
+| `FVC` | **Diestimasi**, bukan diukur | lihat di bawah |
+
+**Sumber:** Greenwald R, Hayat MJ, Dons E, Giles L, Villar R, Jakovljevic DG, Good N. 2019. "Estimating minute ventilation and air pollution inhaled dose using heart rate, breath frequency, age, sex and forced vital capacity: A pooled-data analysis." *PLoS ONE* 14(7): e0218673. DOI: [10.1371/journal.pone.0218673](https://doi.org/10.1371/journal.pone.0218673). Dipilih dari 2 kandidat yang dievaluasi — menang karena:
+
+- Pooled data 471 subjek, umur 4–80, sex seimbang, 5 negara, 3 benua — jauh lebih luas dari kandidat lain (Oneda dkk., *Physiological Reports* 2026, "A Bayesian approach to estimate minute ventilation from heart rate during exercise for assessing environmental exposures of females", DOI: [10.14814/phy2.70767](https://physoc.onlinelibrary.wiley.com/doi/10.14814/phy2.70767) — cuma 19 subjek wanita, treadmill running doang).
+- Aktivitas yang di-cover termasuk **cycling**, bukan cuma running.
+- **Gak butuh kalibrasi lab** (VT1/VT2 dari CPET) kayak model berbasis domain intensitas — kandidat lain gak kepake justru karena itu: gak mungkin device konsumer nentuin domain intensitas tanpa tes lab.
+
+**Akurasi — dicatat apa adanya:** median cross-validated percent error 0.664% (nyaris gak bias secara rata-rata), tapi **IQR 45.4 persentase poin** — prediksi per-menit individual bisa meleset jauh meskipun rata-ratanya gak bias. Ini error tambahan di atas error dosis yang udah ada (§9: cuma 43% perjalanan akurat ±20%) — belum dievaluasi gimana keduanya bertumpuk. Jangan klaim akurasi VE yang lebih baik dari ini.
+
+**`FVC` gak bisa diambil langsung dari Apple Watch.** HealthKit punya tipe `HKQuantityTypeIdentifier.forcedVitalCapacity`, tapi Apple Watch gak pernah nulis ke situ — cuma keisi kalau user pernah pakai app/device spirometer terpisah (jarang). Dua opsi:
+
+1. **FVC terukur** (kalau kebetulan ada di HealthKit) — dipakai apa adanya kalau tersedia.
+2. **FVC diestimasi** dari `height` + `age` + `sex` (semua ada di HealthKit) + etnis, pakai persamaan referensi. **Belum di-pin — task terpisah, lihat §2.1.2.**
+
+### 2.1.2 Sumber estimasi FVC — DIPILIH: South Asian reference equations (Leong et al. 2022)
+
+```
+FVC (L) = intercept − 0.0224×age + 0.0458×height_cm     (pria)
+FVC (L) = intercept − 0.0200×age + 0.0305×height_cm     (wanita)
+
+Pria   : intercept = −3.349
+Wanita : intercept = −1.533
+```
+
+`age` dalam tahun, `height` dalam **cm** (beda dari formula V̇E di §2.1.1 yang makein meter — jangan ketuker unit pas implementasi).
+
+**Sumber:** Leong WY, Gupta A, Hasan M, dkk. 2022. "Reference equations for evaluation of spirometry function tests in South Asia, and among South Asians living in other countries." *European Respiratory Journal* 60(6): 2102962. DOI: [10.1183/13993003.02962-2021](https://doi.org/10.1183/13993003.02962-2021). Open access, koefisien di Tabel 2 (Model M1: umur + tinggi doang, gak pakai berat/region — didesain penulisnya biar "konsisten dipakai kayak GLI 2012 dan NHANES III").
+
+**Kenapa ini yang dipilih** — 4 kandidat dievaluasi total, urutan kronologis:
+
+1. **Hankinson NHANES III (1999)** — Hankinson JL, Odencrantz JR, Fedan KB. "Spirometric reference values from a sample of the general U.S. population." *Am J Respir Crit Care Med* 159(1): 179–187. Closed-form (polinomial `intercept + a·age + b·age² + c·height²`), tapi **ditolak**: cuma 3 kategori ras (Caucasian, African American, Mexican American) — gak ada kategori Asia sama sekali.
+2. **GLI-2012** — Quanjer PH, Stanojevic S, Cole TJ, dkk. 2012. "Multi-ethnic reference values for spirometry for the 3–95-yr age range: the global lung function 2012 equations." *Eur Respir J* 40(6): 1324–1343. Punya kategori "North East Asian"/"South East Asian", tapi **ditolak**: bukan closed-form (spline LMS/GAMLSS, butuh tabel lookup umur-per-umur), dan tetep harus milih kategori etnis per user.
+3. **GLI Global 2022** — Bowerman C, dkk. 2023. "A Race-neutral Approach to the Interpretation of Lung Function Measurements." *Am J Respir Crit Care Med*. Race-neutral (gak perlu nanya etnis user), didukung rekomendasi ATS/ERS April 2023. **Ditolak buat sekarang**, dua alasan: (a) tetep spline-based, butuh tabel `Mspline`/`Sspline` resmi dari GLI yang gak bisa diambil langsung (ersnet.org nolak automated fetch, dan tools resminya **"by law" dibatasi buat riset/edukasi/validasi software, bukan buat dipakai di produk**, belum jelas cakupannya buat use-case CleanRoute); (b) package open-source `rspiro` yang implementasi formulanya berlisensi **GPL (≥2)** — copy kode/tabelnya langsung ke codebase komersial CleanRoute berisiko ketarik kewajiban copyleft GPL.
+4. **South Asian (Leong et al. 2022)** — **dipilih.** Closed-form (linear doang, `intercept + a·age + b·height`), gak ada isu lisensi (paper open access biasa, bukan software berlisensi khusus), tervalidasi di 5.589 subjek net-never-smoker dari Bangladesh/India Utara/India Selatan/Pakistan/Sri Lanka + validasi eksternal 339 orang South Asian di Singapura (studi HELIOS), umur 18–85.
+
+**Catatan jujur soal fit populasi:** South Asian **bukan** Asia Tenggara/Indonesia. Ini bukan formula yang divalidasi buat orang Jakarta — tapi dari semua kandidat yang dicek, ini yang paling deket secara geografis/genetik (apalagi ada lengan validasi Singapura) dari opsi yang beneran bisa diimplementasi tanpa tabel spline atau lisensi bermasalah. Kalau nanti ada waktu buat ngurus akses GLI Global 2022 resmi (klarifikasi syarat pemakaian ke ERS/GLI network), itu tetep upgrade yang lebih bener secara metodologis — lihat langkah 3 di atas.
+
+**Status implementasi:** formula V̇E (§2.1.1) dan estimasi FVC (§2.1.2) **udah dua-duanya diputuskan**. Belum ada baris kode yang jalanin — `VentilationRateProvider` HR-based masih belum dibikin. Urutan kerja yang masuk akal kalau dibikin: (1) HealthKit authorization + baca `height`/`dateOfBirth`/`biologicalSex` sekali di awal ride, (2) live HR stream dari `HKLiveWorkoutBuilder`, (3) hitung FVC via §2.1.2 (sekali per ride, gak berubah-ubah), (4) hitung `V̇E` per update HR via §2.1.1, ganti `ConstantVentilationRate` kalau semua input di atas tersedia — fallback ke 0.040 kalau enggak.
 
 **Nilai lama `0.014 m³/min` udah gak berlaku.** Itu angka aktivitas ringan / duduk di kendaraan (Mainka et al. 2025, diturunkan dari U.S. EPA Exposure Factors Handbook 2011), cocok buat pengendara motor yang duduk diam. Bersepeda = aktivitas moderat–berat, ventilasinya jauh lebih tinggi.
 

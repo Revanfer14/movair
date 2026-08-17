@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import CoreLocation
 
 final class MapSearchDataStore: ObservableObject {
     @Published private(set) var recents: [RecentSearch] = []
@@ -13,13 +14,24 @@ final class MapSearchDataStore: ObservableObject {
         load()
     }
 
-    func add(_ title: String) {
+    func add(
+        _ title: String,
+        subtitle: String = "",
+        coordinate: CLLocationCoordinate2D? = nil
+    ) {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
 
-        // Avoid duplicates, most-recent-first.
         recents.removeAll { $0.title.caseInsensitiveCompare(trimmed) == .orderedSame }
-        recents.insert(RecentSearch(title: trimmed), at: 0)
+        recents.insert(
+            RecentSearch(
+                title: trimmed,
+                subtitle: subtitle,
+                latitude: coordinate?.latitude,
+                longitude: coordinate?.longitude
+            ),
+            at: 0
+        )
         if recents.count > maxItems {
             recents = Array(recents.prefix(maxItems))
         }

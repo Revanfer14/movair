@@ -59,7 +59,7 @@ struct MapRouteOptionCard: View {
 
                 Text(route.pollutionDeltaLabel)
                     .font(Font.Brand.footnote)
-                    .foregroundStyle(Color.Brand.darkgray)
+                    .foregroundStyle(Color.Brand.labelPrimary)
                     .lineLimit(1)
             }
 
@@ -84,7 +84,7 @@ struct MapRouteOptionCard: View {
 
                 Text(route.pollutionDeltaLabel)
                     .font(Font.Brand.footnote)
-                    .foregroundStyle(Color.Brand.darkgray)
+                    .foregroundStyle(Color.Brand.labelPrimary)
                     .lineLimit(1)
             }
         }

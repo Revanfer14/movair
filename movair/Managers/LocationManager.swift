@@ -3,6 +3,7 @@ import Combine
 
 final class LocationManager: NSObject, ObservableObject {
     @Published var userLocation: CLLocationCoordinate2D?
+    @Published private(set) var latestLocation: CLLocation?
     @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
     @Published var locationError: String?
 
@@ -11,8 +12,9 @@ final class LocationManager: NSObject, ObservableObject {
     override init() {
         super.init()
         manager.delegate = self
-        manager.desiredAccuracy = kCLLocationAccuracyBest
-        manager.distanceFilter = 10 // update when user moves ~10m
+        manager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
+        manager.distanceFilter = 10
+        manager.activityType = .fitness
         authorizationStatus = manager.authorizationStatus
     }
 
@@ -38,6 +40,33 @@ final class LocationManager: NSObject, ObservableObject {
     func stopUpdating() {
         manager.stopUpdatingLocation()
     }
+
+    func startRideTracking() {
+        manager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
+        manager.distanceFilter = kCLDistanceFilterNone
+        manager.activityType = .fitness
+        manager.pausesLocationUpdatesAutomatically = false
+        manager.allowsBackgroundLocationUpdates = true
+        switch manager.authorizationStatus {
+        case .authorizedAlways:
+            startUpdating()
+        case .authorizedWhenInUse:
+            manager.requestAlwaysAuthorization()
+            startUpdating()
+        case .notDetermined:
+            manager.requestWhenInUseAuthorization()
+        case .denied, .restricted:
+            locationError = "Location access is denied. Enable it in Settings."
+        @unknown default:
+            break
+        }
+    }
+
+    func stopRideTracking() {
+        manager.distanceFilter = 10
+        manager.allowsBackgroundLocationUpdates = false
+        manager.pausesLocationUpdatesAutomatically = true
+    }
 }
 
 extension LocationManager: CLLocationManagerDelegate {
@@ -59,9 +88,10 @@ extension LocationManager: CLLocationManagerDelegate {
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let coordinate = locations.last?.coordinate else { return }
+        guard let location = locations.last else { return }
         DispatchQueue.main.async {
-            self.userLocation = coordinate
+            self.latestLocation = location
+            self.userLocation = location.coordinate
             self.locationError = nil
         }
     }
@@ -70,6 +100,5 @@ extension LocationManager: CLLocationManagerDelegate {
         DispatchQueue.main.async {
             self.locationError = error.localizedDescription
         }
-        print("LocationManager error: \(error.localizedDescription)")
     }
 }

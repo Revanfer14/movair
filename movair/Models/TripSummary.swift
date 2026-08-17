@@ -1,7 +1,7 @@
 import Foundation
 import CoreLocation
 
-struct TripSummary: Identifiable, Equatable {
+struct TripSummary: Identifiable, Equatable, Codable {
     let id: UUID
     let originTitle: String
     let destinationTitle: String
@@ -10,9 +10,32 @@ struct TripSummary: Identifiable, Equatable {
     let averageSpeedKmh: Double
     let exposureUg: Int
     let exposureLevel: ExposureLevel
+    let isMeasuredExposure: Bool
+    let unattributedDurationMinutes: Int
     let dailyBudgetUg: Int
     let coordinates: [CLLocationCoordinate2D]
     let completedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case originTitle
+        case destinationTitle
+        case distanceKm
+        case durationMinutes
+        case averageSpeedKmh
+        case exposureUg
+        case exposureLevel
+        case isMeasuredExposure
+        case unattributedDurationMinutes
+        case dailyBudgetUg
+        case coordinates
+        case completedAt
+    }
+
+    private struct CoordinatePayload: Codable {
+        let latitude: Double
+        let longitude: Double
+    }
 
     init(
         id: UUID = UUID(),
@@ -23,6 +46,8 @@ struct TripSummary: Identifiable, Equatable {
         averageSpeedKmh: Double,
         exposureUg: Int,
         exposureLevel: ExposureLevel,
+        isMeasuredExposure: Bool = false,
+        unattributedDurationMinutes: Int = 0,
         dailyBudgetUg: Int = 261,
         coordinates: [CLLocationCoordinate2D] = [],
         completedAt: Date = Date()
@@ -35,9 +60,49 @@ struct TripSummary: Identifiable, Equatable {
         self.averageSpeedKmh = averageSpeedKmh
         self.exposureUg = exposureUg
         self.exposureLevel = exposureLevel
+        self.isMeasuredExposure = isMeasuredExposure
+        self.unattributedDurationMinutes = unattributedDurationMinutes
         self.dailyBudgetUg = dailyBudgetUg
         self.coordinates = coordinates
         self.completedAt = completedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        originTitle = try container.decode(String.self, forKey: .originTitle)
+        destinationTitle = try container.decode(String.self, forKey: .destinationTitle)
+        distanceKm = try container.decode(Double.self, forKey: .distanceKm)
+        durationMinutes = try container.decode(Int.self, forKey: .durationMinutes)
+        averageSpeedKmh = try container.decode(Double.self, forKey: .averageSpeedKmh)
+        exposureUg = try container.decode(Int.self, forKey: .exposureUg)
+        exposureLevel = try container.decode(ExposureLevel.self, forKey: .exposureLevel)
+        isMeasuredExposure = try container.decodeIfPresent(Bool.self, forKey: .isMeasuredExposure) ?? false
+        unattributedDurationMinutes = try container.decodeIfPresent(Int.self, forKey: .unattributedDurationMinutes) ?? 0
+        dailyBudgetUg = try container.decodeIfPresent(Int.self, forKey: .dailyBudgetUg) ?? 261
+        completedAt = try container.decode(Date.self, forKey: .completedAt)
+
+        let payloads = try container.decodeIfPresent([CoordinatePayload].self, forKey: .coordinates) ?? []
+        coordinates = payloads.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(originTitle, forKey: .originTitle)
+        try container.encode(destinationTitle, forKey: .destinationTitle)
+        try container.encode(distanceKm, forKey: .distanceKm)
+        try container.encode(durationMinutes, forKey: .durationMinutes)
+        try container.encode(averageSpeedKmh, forKey: .averageSpeedKmh)
+        try container.encode(exposureUg, forKey: .exposureUg)
+        try container.encode(exposureLevel, forKey: .exposureLevel)
+        try container.encode(isMeasuredExposure, forKey: .isMeasuredExposure)
+        try container.encode(unattributedDurationMinutes, forKey: .unattributedDurationMinutes)
+        try container.encode(dailyBudgetUg, forKey: .dailyBudgetUg)
+        try container.encode(completedAt, forKey: .completedAt)
+
+        let payloads = coordinates.map { CoordinatePayload(latitude: $0.latitude, longitude: $0.longitude) }
+        try container.encode(payloads, forKey: .coordinates)
     }
 
     var dailyExposurePercent: Int {
@@ -90,6 +155,11 @@ struct TripSummary: Identifiable, Equatable {
         let dayFormatter = DateFormatter()
         dayFormatter.dateFormat = "MMM d"
         return "\(dayFormatter.string(from: completedAt)) at \(time)"
+    }
+
+    var unattributedDurationLabel: String? {
+        guard unattributedDurationMinutes > 0 else { return nil }
+        return "\(unattributedDurationMinutes) min off route — not included in dose"
     }
 
     static func == (lhs: TripSummary, rhs: TripSummary) -> Bool {
