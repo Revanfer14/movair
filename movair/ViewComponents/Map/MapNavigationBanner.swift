@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreLocation
 
 struct MapNavigationBanner: View {
     let instructions: [MapNavigationViewModel.Instruction]
@@ -42,10 +43,10 @@ struct MapNavigationBanner: View {
 
                 if instructions.count > 1 {
                     HStack(spacing: 4) {
-                        ForEach(0..<instructions.count, id: \.self) { index in
+                        ForEach(0..<instructions.count, id: \.self) { dotIndex in
                             Circle()
                                 .fill(
-                                    index == currentIndex
+                                    dotIndex == currentIndex
                                         ? Color.Brand.labelPrimary
                                         : Color.Brand.labelPrimary.opacity(0.2)
                                 )
@@ -66,13 +67,13 @@ struct MapNavigationBanner: View {
 }
 
 #Preview {
-//    MapNavigationBanner(
-//        instructions: [
-//            .init(distanceRemainingMeters: 3000, text: "Turn left onto Jalan Damai Foresta", systemImage: "arrow.turn.up.left", targetCoordinate: .init()),
-//            .init(distanceRemainingMeters: 1200, text: "Continue straight", systemImage: "arrow.up", targetCoordinate: .init()),
-//            .init(distanceRemainingMeters: 800, text: "Keep right", systemImage: "arrow.turn.up.right", targetCoordinate: .init())
-//        ],
-//        currentIndex: .constant(0)
-//    )
-//    .padding()
+    MapNavigationBanner(
+        instructions: [
+            .init(distanceRemainingMeters: 350, text: "Turn left onto Jalan Damai Foresta", systemImage: "arrow.turn.up.left", targetCoordinate: CLLocationCoordinate2D(latitude: -6.291, longitude: 106.641)),
+            .init(distanceRemainingMeters: 1200, text: "Continue straight on Boulevard Utara", systemImage: "arrow.up", targetCoordinate: CLLocationCoordinate2D(latitude: -6.295, longitude: 106.648)),
+            .init(distanceRemainingMeters: 2800, text: "Keep right toward BXChange Mall", systemImage: "arrow.turn.up.right", targetCoordinate: CLLocationCoordinate2D(latitude: -6.301, longitude: 106.653))
+        ],
+        currentIndex: .constant(0)
+    )
+    .padding()
 }

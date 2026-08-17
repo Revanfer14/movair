@@ -3,6 +3,7 @@ import Combine
 
 final class LocationManager: NSObject, ObservableObject {
     @Published var userLocation: CLLocationCoordinate2D?
+    @Published var userHeading: CLHeading?
     @Published private(set) var latestLocation: CLLocation?
     @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
     @Published var locationError: String?
@@ -15,6 +16,7 @@ final class LocationManager: NSObject, ObservableObject {
         manager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
         manager.distanceFilter = 10
         manager.activityType = .fitness
+        manager.headingFilter = 3
         authorizationStatus = manager.authorizationStatus
     }
 
@@ -47,6 +49,9 @@ final class LocationManager: NSObject, ObservableObject {
         manager.activityType = .fitness
         manager.pausesLocationUpdatesAutomatically = false
         manager.allowsBackgroundLocationUpdates = true
+        if CLLocationManager.headingAvailable() {
+            manager.startUpdatingHeading()
+        }
         switch manager.authorizationStatus {
         case .authorizedAlways:
             startUpdating()
@@ -66,6 +71,8 @@ final class LocationManager: NSObject, ObservableObject {
         manager.distanceFilter = 10
         manager.allowsBackgroundLocationUpdates = false
         manager.pausesLocationUpdatesAutomatically = true
+        manager.stopUpdatingHeading()
+        userHeading = nil
     }
 }
 
@@ -93,6 +100,13 @@ extension LocationManager: CLLocationManagerDelegate {
             self.latestLocation = location
             self.userLocation = location.coordinate
             self.locationError = nil
+        }
+    }
+
+    func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
+        guard newHeading.headingAccuracy >= 0 else { return }
+        DispatchQueue.main.async {
+            self.userHeading = newHeading
         }
     }
 

@@ -61,6 +61,16 @@ final class HistoryViewModel: ObservableObject {
         selectedDate = date
     }
 
+    func deleteTrip(_ trip: TripSummary) {
+        store.delete(tripID: trip.id)
+        rebuildWeek(around: selectedDate)
+    }
+
+    func deleteTrip(id: UUID) {
+        store.delete(tripID: id)
+        rebuildWeek(around: selectedDate)
+    }
+
     func rebuildWeek(around date: Date) {
         let calendar = Calendar.current
         let start = calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? date
