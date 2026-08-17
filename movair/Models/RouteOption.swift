@@ -14,6 +14,7 @@ struct RouteOption: Identifiable, Equatable {
     let isRecommended: Bool
     let isLonger: Bool
     let coordinates: [CLLocationCoordinate2D]
+    let steps: [RouteStep]
 
     init(
         id: UUID = UUID(),
@@ -26,7 +27,8 @@ struct RouteOption: Identifiable, Equatable {
         hasEquivalentExposure: Bool = false,
         isRecommended: Bool = false,
         isLonger: Bool = false,
-        coordinates: [CLLocationCoordinate2D]
+        coordinates: [CLLocationCoordinate2D],
+        steps: [RouteStep] = []
     ) {
         self.id = id
         self.title = title
@@ -39,6 +41,7 @@ struct RouteOption: Identifiable, Equatable {
         self.isRecommended = isRecommended
         self.isLonger = isLonger
         self.coordinates = coordinates
+        self.steps = steps
     }
 
     var distanceLabel: String {

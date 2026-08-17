@@ -30,7 +30,7 @@ struct MapNavigationBanner: View {
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(String(format: "%.0f km", instruction.distanceKm))
+                Text(instruction.distanceLabel)
                     .font(Font.Brand.title2Bold)
                     .foregroundStyle(Color.primary)
 
@@ -66,13 +66,13 @@ struct MapNavigationBanner: View {
 }
 
 #Preview {
-    MapNavigationBanner(
-        instructions: [
-            .init(distanceKm: 3, text: "Turn left onto Jalan Damai Foresta", systemImage: "arrow.turn.up.left"),
-            .init(distanceKm: 1.2, text: "Continue straight", systemImage: "arrow.up"),
-            .init(distanceKm: 0.8, text: "Keep right", systemImage: "arrow.turn.up.right")
-        ],
-        currentIndex: .constant(0)
-    )
-    .padding()
+//    MapNavigationBanner(
+//        instructions: [
+//            .init(distanceRemainingMeters: 3000, text: "Turn left onto Jalan Damai Foresta", systemImage: "arrow.turn.up.left", targetCoordinate: .init()),
+//            .init(distanceRemainingMeters: 1200, text: "Continue straight", systemImage: "arrow.up", targetCoordinate: .init()),
+//            .init(distanceRemainingMeters: 800, text: "Keep right", systemImage: "arrow.turn.up.right", targetCoordinate: .init())
+//        ],
+//        currentIndex: .constant(0)
+//    )
+//    .padding()
 }

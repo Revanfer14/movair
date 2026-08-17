@@ -64,7 +64,6 @@ final class RouteSelectionViewModel: ObservableObject {
         regenerateRoutes()
     }
 
-    /// Replace origin with a searched place and re-route.
     func updateOrigin(to place: SelectedDestination) {
         originTitle = place.title
         originCoordinate = place.coordinate
@@ -72,7 +71,6 @@ final class RouteSelectionViewModel: ObservableObject {
         regenerateRoutes()
     }
 
-    /// Reset origin to current GPS location and re-route.
     func updateOriginToCurrentLocation() {
         guard let coordinate = userLocationCoordinate ?? originCoordinate else { return }
         originTitle = "Current location"
@@ -81,13 +79,11 @@ final class RouteSelectionViewModel: ObservableObject {
         regenerateRoutes()
     }
 
-    /// Replace destination with a searched place and re-route.
     func updateDestination(to place: SelectedDestination) {
         destination = place
         regenerateRoutes()
     }
 
-    /// Swap origin ↔ destination titles and coordinates, then rebuild routes.
     func swapEndpoints() {
         guard let destination, let originCoordinate else { return }
 
@@ -182,7 +178,8 @@ final class RouteSelectionViewModel: ObservableObject {
                 hasEquivalentExposure: hasEquivalentExposure,
                 isRecommended: index == 0,
                 isLonger: route.distanceMeters > shortestDistance,
-                coordinates: route.coordinates
+                coordinates: route.coordinates,
+                steps: route.steps
             )
         }
 
@@ -196,14 +193,35 @@ final class RouteSelectionViewModel: ObservableObject {
         return outbound + returnPath
     }
 
+    private func makeRoundTripSteps(from steps: [RouteStep], outboundCount: Int) -> [RouteStep] {
+        guard !steps.isEmpty else { return [] }
+        var allSteps = steps
+        if let last = steps.last {
+            let turnAround = RouteStep(
+                distanceMeters: 50,
+                durationSeconds: 15,
+                maneuverType: 9,
+                text: "Turn around and head back toward \(originTitle)",
+                streetName: last.streetName,
+                coordinate: last.coordinate,
+                waypointIndex: outboundCount
+            )
+            allSteps.append(turnAround)
+        }
+        return allSteps
+    }
+
     private func routesForPlanning(from routes: [ORSRoute]) -> [ORSRoute] {
         guard isRoundTrip else { return routes }
         return routes.map { route in
-            ORSRoute(
+            let roundTripCoordinates = makeRoundTrip(route.coordinates)
+            let roundTripSteps = makeRoundTripSteps(from: route.steps, outboundCount: route.coordinates.count)
+            return ORSRoute(
                 id: route.id,
-                coordinates: makeRoundTrip(route.coordinates),
+                coordinates: roundTripCoordinates,
                 distanceMeters: route.distanceMeters * 2,
-                durationSeconds: route.durationSeconds * 2
+                durationSeconds: route.durationSeconds * 2,
+                steps: roundTripSteps
             )
         }
     }
