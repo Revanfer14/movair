@@ -6,8 +6,6 @@ final class RoutePolyline: MKPolyline, @unchecked Sendable {
     var isSelected: Bool = false
 }
 
-<<<<<<< Updated upstream
-=======
 final class DottedConnectorPolyline: MKPolyline, @unchecked Sendable {}
 
 final class RouteStartAnnotation: NSObject, MKAnnotation {
@@ -67,7 +65,6 @@ final class UserLocationAnnotationView: MKAnnotationView {
     }
 }
 
->>>>>>> Stashed changes
 struct MapViewComponent: UIViewRepresentable {
     @Binding var recenterTrigger: Bool
 
@@ -251,8 +248,6 @@ struct MapViewComponent: UIViewRepresentable {
     private func updateOverlays(on mapView: MKMapView) {
         mapView.removeOverlays(mapView.overlays)
 
-<<<<<<< Updated upstream
-=======
         if isNavigationTracking, let userCoord = centerCoordinate, let firstRouteCoord = routeCoordinates.first {
             let userLoc = CLLocation(latitude: userCoord.latitude, longitude: userCoord.longitude)
             let startLoc = CLLocation(latitude: firstRouteCoord.latitude, longitude: firstRouteCoord.longitude)
@@ -264,7 +259,6 @@ struct MapViewComponent: UIViewRepresentable {
             }
         }
 
->>>>>>> Stashed changes
         if !routeOptions.isEmpty {
             let unselectedRoutes = routeOptions.filter { $0.id != selectedRouteID }
             for route in unselectedRoutes {
@@ -461,8 +455,6 @@ struct MapViewComponent: UIViewRepresentable {
         }
 
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
-<<<<<<< Updated upstream
-=======
             if overlay is DottedConnectorPolyline {
                 let renderer = MKPolylineRenderer(overlay: overlay)
                 renderer.strokeColor = UIColor.white.withAlphaComponent(0.85)
@@ -472,7 +464,6 @@ struct MapViewComponent: UIViewRepresentable {
                 return renderer
             }
 
->>>>>>> Stashed changes
             if let routePolyline = overlay as? RoutePolyline {
                 let renderer = MKPolylineRenderer(polyline: routePolyline)
                 if routePolyline.isSelected {
