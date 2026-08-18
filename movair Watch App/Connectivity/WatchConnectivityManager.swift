@@ -1,6 +1,7 @@
 import Foundation
 import WatchConnectivity
 import Combine
+import CoreLocation
 
 @MainActor
 final class WatchConnectivityManager: NSObject, ObservableObject {
@@ -9,6 +10,7 @@ final class WatchConnectivityManager: NSObject, ObservableObject {
 
     @Published private(set) var latestPayload: WatchSessionPayload = .idle
     @Published private(set) var isReachable: Bool = false
+    @Published private(set) var routeCoordinates: [CLLocationCoordinate2D] = []
 
     private var session: WCSession?
     private var lastHeartRateSentAt: Date?
@@ -68,6 +70,10 @@ final class WatchConnectivityManager: NSObject, ObservableObject {
     // Apply incoming payload
     private func apply(payload: WatchSessionPayload) {
         latestPayload = payload
+    }
+
+    private func apply(routeSync: WatchRouteSync) {
+        routeCoordinates = routeSync.coordinates
     }
 }
 
@@ -143,7 +149,9 @@ extension WatchConnectivityManager: WCSessionDelegate {
         didReceiveUserInfo userInfo: [String: Any] = [:]
     ) {
         Task { @MainActor in
-            if let payload = WatchSessionPayload(from: userInfo) {
+            if let routeSync = WatchRouteSync(from: userInfo) {
+                self.apply(routeSync: routeSync)
+            } else if let payload = WatchSessionPayload(from: userInfo) {
                 self.apply(payload: payload)
             }
         }

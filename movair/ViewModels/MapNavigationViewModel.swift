@@ -9,6 +9,7 @@ final class MapNavigationViewModel: ObservableObject {
         let id: UUID
         var distanceRemainingMeters: Double
         let text: String
+        let streetName: String
         let systemImage: String
         let targetCoordinate: CLLocationCoordinate2D
         let waypointIndex: Int
@@ -17,6 +18,7 @@ final class MapNavigationViewModel: ObservableObject {
             id: UUID = UUID(),
             distanceRemainingMeters: Double,
             text: String,
+            streetName: String = "",
             systemImage: String,
             targetCoordinate: CLLocationCoordinate2D,
             waypointIndex: Int = 0
@@ -24,6 +26,7 @@ final class MapNavigationViewModel: ObservableObject {
             self.id = id
             self.distanceRemainingMeters = distanceRemainingMeters
             self.text = text
+            self.streetName = streetName
             self.systemImage = systemImage
             self.targetCoordinate = targetCoordinate
             self.waypointIndex = waypointIndex
@@ -45,6 +48,7 @@ final class MapNavigationViewModel: ObservableObject {
             lhs.id == rhs.id
                 && lhs.distanceRemainingMeters == rhs.distanceRemainingMeters
                 && lhs.text == rhs.text
+                && lhs.streetName == rhs.streetName
                 && lhs.systemImage == rhs.systemImage
                 && lhs.targetCoordinate.latitude == rhs.targetCoordinate.latitude
                 && lhs.targetCoordinate.longitude == rhs.targetCoordinate.longitude
@@ -84,6 +88,10 @@ final class MapNavigationViewModel: ObservableObject {
     private var isUpdatingDose = false
     private var pendingDoseSnapshot: RideTrackingSnapshot?
     private var doseUpdateTask: Task<Void, Never>?
+
+    var elapsedSeconds: Int {
+        Int(elapsedDurationSeconds)
+    }
 
     var currentInstruction: Instruction? {
         guard instructions.indices.contains(currentInstructionIndex) else { return nil }
@@ -182,6 +190,7 @@ final class MapNavigationViewModel: ObservableObject {
                 Instruction(
                     distanceRemainingMeters: step.distanceMeters,
                     text: step.text,
+                    streetName: step.streetName,
                     systemImage: step.systemImage,
                     targetCoordinate: step.coordinate,
                     waypointIndex: step.waypointIndex

@@ -2,13 +2,11 @@ import SwiftUI
 
 struct WatchActiveNavigationView: View {
     @ObservedObject var viewModel: WatchNavigationViewModel
-    var onDismiss: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
             Spacer(minLength: 4)
 
-            // Primary metric: distance traveled
             Text(formattedDistance)
                 .font(Font.Brand.watchMetric)
                 .foregroundStyle(Color.primary)
@@ -17,69 +15,55 @@ struct WatchActiveNavigationView: View {
 
             Spacer().frame(height: 8)
 
-            // Secondary metrics: exposure + elapsed time
             HStack(spacing: 16) {
                 Text("\(viewModel.accumulatedExposureUg) µg")
                     .font(Font.Brand.footnote)
                     .foregroundStyle(Color.Brand.darkgray)
 
-                Text(formattedElapsed)
+                Text(viewModel.elapsedTimeLabel)
                     .font(Font.Brand.footnote)
                     .foregroundStyle(Color.Brand.darkgray)
             }
 
-            Text(formattedHeartRate)
-                .font(Font.Brand.footnote)
-                .foregroundStyle(Color.Brand.darkgray)
-                .padding(.top, 6)
-
             Spacer(minLength: 12)
 
-            // Native controls
             controls
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, 4)
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button {
-                    onDismiss()
-                } label: {
-                    Image(systemName: "xmark")
-                }
-                .accessibilityLabel("Close")
-            }
-        }
+        .navigationBarBackButtonHidden(true)
     }
 
-    // Controls
     @ViewBuilder
     private var controls: some View {
         switch viewModel.state {
         case .active:
-            Button("Pause") {
+            WatchPrimaryButton(
+                title: "Pause",
+                tint: Color.Brand.primaryYellow,
+                foreground: Color.black
+            ) {
                 viewModel.pause()
             }
-            .buttonStyle(.borderedProminent)
-            .tint(Color.Brand.blue900)
 
         case .paused:
-            HStack(spacing: 12) {
-                Button {
-                    viewModel.finish()
-                } label: {
-                    Text("Finish")
-                }
-                .buttonStyle(.bordered)
-                .foregroundStyle(Color.Brand.primaryRed)
-
-                Button {
+            HStack(spacing: 24) {
+                WatchCircularIconButton(
+                    systemImage: "play.fill",
+                    label: "Resume",
+                    tint: Color.Brand.blue600
+                ) {
                     viewModel.resume()
-                } label: {
-                    Text("Resume")
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(Color.Brand.blue900)
+
+                WatchCircularIconButton(
+                    systemImage: "flag.checkered",
+                    label: "Finish",
+                    tint: Color.Brand.primaryYellow,
+                    foreground: Color.black
+                ) {
+                    viewModel.finish()
+                }
             }
 
         default:
@@ -87,24 +71,16 @@ struct WatchActiveNavigationView: View {
         }
     }
 
-    // Formatting
     private var formattedDistance: String {
+        let meters = viewModel.distanceKm * 1000
+        if meters < 1000 {
+            let rounded = max(0, Int((meters / 10).rounded()) * 10)
+            return "\(rounded) m"
+        }
         if viewModel.distanceKm < 10 {
-            String(format: "%.1f km", viewModel.distanceKm)
-        } else {
-            String(format: "%.0f km", viewModel.distanceKm)
+            return String(format: "%.1f km", viewModel.distanceKm)
         }
-    }
-
-    private var formattedElapsed: String {
-        "\(viewModel.elapsedMinutes) min"
-    }
-
-    private var formattedHeartRate: String {
-        guard let heartRateBPM = viewModel.heartRateBPM else {
-            return "-- bpm"
-        }
-        return "\(Int(heartRateBPM.rounded())) bpm"
+        return String(format: "%.0f km", viewModel.distanceKm)
     }
 }
 
@@ -118,8 +94,7 @@ struct WatchActiveNavigationView: View {
                 vm.elapsedMinutes = 1
                 vm.state = .active
                 return vm
-            }(),
-            onDismiss: {}
+            }()
         )
     }
 }
@@ -134,8 +109,7 @@ struct WatchActiveNavigationView: View {
                 vm.elapsedMinutes = 1
                 vm.state = .paused
                 return vm
-            }(),
-            onDismiss: {}
+            }()
         )
     }
 }

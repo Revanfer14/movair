@@ -40,6 +40,7 @@ struct MapView: View {
             .onReceive(locationManager.$latestLocation.compactMap { $0 }) { location in
                 guard phase == .navigating else { return }
                 activeNavigationViewModel.process(location: location)
+                pushStateToWatch()
             }
             .onReceive(phoneConnectivity.$latestHeartRateBPM) { bpm in
                 activeNavigationViewModel.updateHeartRate(bpm)
@@ -114,6 +115,7 @@ struct MapView: View {
                             )
                             locationManager.startRideTracking()
                             phase = .navigating
+                            phoneConnectivity.sendRouteCoordinates(route.coordinates)
                             if let payload = routeSelectionViewModel.routePlanPayload(chosenRouteID: route.id, planID: planID) {
                                 Task.detached(priority: .background) {
                                     await routePlanArchiver.archive(payload)
@@ -286,11 +288,21 @@ struct MapView: View {
     }
 
     private func pushStateToWatch() {
+        let instruction = activeNavigationViewModel.currentInstruction
+        let userCoordinate = locationManager.latestLocation?.coordinate
         phoneConnectivity.send(
             phase: phase,
             distanceKm: activeNavigationViewModel.distanceKm,
             exposureUg: activeNavigationViewModel.accumulatedExposureUg,
-            elapsedMinutes: activeNavigationViewModel.durationMinutes
+            elapsedMinutes: activeNavigationViewModel.durationMinutes,
+            elapsedSeconds: activeNavigationViewModel.elapsedSeconds,
+            instructionText: instruction?.text ?? "",
+            instructionDistanceMeters: instruction?.distanceRemainingMeters ?? 0,
+            instructionStreetName: instruction?.streetName ?? "",
+            instructionSystemImage: instruction?.systemImage ?? "arrow.up",
+            userLatitude: userCoordinate?.latitude,
+            userLongitude: userCoordinate?.longitude,
+            userHeadingDegrees: activeNavigationViewModel.routeHeadingDegrees
         )
     }
 }

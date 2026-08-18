@@ -3,9 +3,15 @@ import SwiftUI
 struct WatchIdleView: View {
     var body: some View {
         VStack(spacing: 16) {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.Brand.gray.opacity(0.35))
-                .frame(width: 72, height: 72)
+            ZStack {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color.Brand.blue600)
+                    .frame(width: 72, height: 72)
+
+                Image(systemName: "bicycle")
+                    .font(.system(size: 32, weight: .semibold))
+                    .foregroundStyle(Color.Brand.white)
+            }
 
             Text("Setup your ride\non Your iPhone!")
                 .font(Font.Brand.body)

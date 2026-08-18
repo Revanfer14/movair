@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import CoreLocation
 
 @MainActor
 final class WatchNavigationViewModel: ObservableObject {
@@ -8,6 +9,13 @@ final class WatchNavigationViewModel: ObservableObject {
     @Published var accumulatedExposureUg: Int = 0
     @Published var elapsedMinutes: Int = 0
     @Published private(set) var heartRateBPM: Double?
+    @Published private(set) var instructionText: String = ""
+    @Published private(set) var instructionDistanceMeters: Double = 0
+    @Published private(set) var instructionStreetName: String = ""
+    @Published private(set) var instructionSystemImage: String = "arrow.up"
+    @Published private(set) var userCoordinate: CLLocationCoordinate2D?
+    @Published private(set) var userHeadingDegrees: Double?
+    @Published private(set) var routeCoordinates: [CLLocationCoordinate2D] = []
 
     private let connectivity: WatchConnectivityManager
     private let heartRateManager: WatchHeartRateManager
@@ -30,6 +38,13 @@ final class WatchNavigationViewModel: ObservableObject {
             .receive(on: RunLoop.main)
             .sink { [weak self] payload in
                 self?.apply(payload: payload)
+            }
+            .store(in: &cancellables)
+
+        connectivity.$routeCoordinates
+            .receive(on: RunLoop.main)
+            .sink { [weak self] coordinates in
+                self?.routeCoordinates = coordinates
             }
             .store(in: &cancellables)
     }
@@ -63,7 +78,17 @@ final class WatchNavigationViewModel: ObservableObject {
         distanceKm = payload.distanceKm
         accumulatedExposureUg = payload.exposureUg
         elapsedMinutes = payload.elapsedMinutes
-        accumulatedSeconds = payload.elapsedMinutes * 60
+        accumulatedSeconds = payload.elapsedSeconds
+        instructionText = payload.instructionText
+        instructionDistanceMeters = payload.instructionDistanceMeters
+        instructionStreetName = payload.instructionStreetName
+        instructionSystemImage = payload.instructionSystemImage
+        userHeadingDegrees = payload.userHeadingDegrees
+        if let latitude = payload.userLatitude, let longitude = payload.userLongitude {
+            userCoordinate = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+        } else {
+            userCoordinate = nil
+        }
 
         if newState != state {
             state = newState
@@ -113,6 +138,12 @@ final class WatchNavigationViewModel: ObservableObject {
     func dismissToHome() {
     }
 
+    var elapsedTimeLabel: String {
+        let minutes = accumulatedSeconds / 60
+        let seconds = accumulatedSeconds % 60
+        return String(format: "%d:%02d", minutes, seconds)
+    }
+
     func resetToIdle() {
         stopTimer()
         state = .idle
@@ -120,6 +151,13 @@ final class WatchNavigationViewModel: ObservableObject {
         accumulatedExposureUg = 0
         elapsedMinutes = 0
         accumulatedSeconds = 0
+        instructionText = ""
+        instructionDistanceMeters = 0
+        instructionStreetName = ""
+        instructionSystemImage = "arrow.up"
+        userCoordinate = nil
+        userHeadingDegrees = nil
+        routeCoordinates = []
         heartRateManager.stop()
     }
 

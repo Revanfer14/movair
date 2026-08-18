@@ -3,9 +3,9 @@ import SwiftUI
 struct WatchCompletedView: View {
     var body: some View {
         VStack(spacing: 16) {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.Brand.gray.opacity(0.35))
-                .frame(width: 72, height: 72)
+            Image(systemName: "fireworks")
+                .font(.system(size: 44, weight: .regular))
+                .foregroundStyle(Color.Brand.primaryYellow)
 
             VStack(spacing: 6) {
                 Text("Activity complete!")

@@ -3,6 +3,8 @@ import SwiftUI
 struct WatchPrimaryButton: View {
     let title: String
     var systemImage: String? = nil
+    var tint: Color = Color.Brand.blue900
+    var foreground: Color = Color.Brand.white
     let action: () -> Void
 
     var body: some View {
@@ -17,8 +19,8 @@ struct WatchPrimaryButton: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
-            .foregroundStyle(Color.Brand.white)
-            .background(Color.Brand.blue900, in: Capsule())
+            .foregroundStyle(foreground)
+            .background(tint, in: Capsule())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)
