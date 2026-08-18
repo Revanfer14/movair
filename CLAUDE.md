@@ -81,11 +81,13 @@ Alur live ride:
 
 ```
 User mulai gowes
-  → GPS proyeksi posisi ke polyline rute terpilih
+  → GPS proyeksi posisi ke polyline rute terpilih (jalan sama persis off-route atau enggak, §4.6)
   → deteksi masuk/keluar batas segmen → timer per segmen mulai dari 0, stop pas keluar
-  → tᵢ_aktual = akumulasi durasi per segmen
+  → tᵢ_aktual = akumulasi durasi per segmen (kumulatif sejak awal ride)
+  → tiap update lokasi: Δtᵢ = tᵢ_sekarang − tᵢ_update-sebelumnya per segmen
   → tiap ganti jam WIB: re-fetch Open-Meteo + re-prediksi C_base
-  → Dosis_aktual = VE × Σ(Cᵢ × tᵢ_aktual)
+  → tiap update HR: VE_sekarang dihitung dari HR (§4.7)
+  → Δdosis = VE_sekarang × Σ(Cᵢ × Δtᵢ) ; dosis_total += Δdosis   ← inkremental, BUKAN VE_sekarang × exposure kumulatif dihitung ulang
 ```
 
 **Pembagian tugas yang dikunci:** ML ngasih **angka dosis absolut**, rumus deterministik ngasih **ranking**. Model ML buta lokasi — seluruh diferensiasi spasial datang dari `roads_data.json`, bukan dari model.
@@ -114,11 +116,16 @@ User mulai gowes
 5. Konstanta rumus:
      M_road  : arteri 1.25 · kolektor 1.15 · lokal 1.00
      M_green : 1 − 0.05 × greenery_index
-     VE      : 0.040 m³/min  (= 40 L/min)
+     VE      : 0.040 m³/min (fallback) — atau HR-based (§4.7) kalau HR > 30 bpm & profil HealthKit lengkap
      F_moda  : TIDAK DIPAKAI — lihat §4.7, jangan dimasukin balik
-     Dosis   : VE × Σ(Cᵢ × M_road × M_green × menit)
+     Dosis   : planning → VE × Σ(Cᵢ × M_road × M_green × menit)      ← VE konstan, boleh di luar Σ
+               live     → Σᵢ (VEᵢ × Cᵢ × M_road,ᵢ × M_green,ᵢ × menit) ← VE WAJIB di dalam Σ, lihat §4.7
 6. Planning mode: Σ tᵢ harus balik persis ke ETA total dari ORS
    Live mode: Σ tᵢ = durasi terukur, TIDAK dipaksa sama dengan ETA
+7. Fetch CAMS pakai clustering jarak (§4.2)  ← BUKAN floor(lat/0.4), floor(lon/0.4)
+8. Live mode: dosis diakumulasi INKREMENTAL per update (Δdosis += VE_sekarang × Σ(Cᵢ×Δtᵢ))
+   ← BUKAN VE_sekarang × exposure_seluruh_riwayat dihitung ulang tiap update
+9. Off-route BUKAN kondisi khusus buat map-matching/timer ← lihat §4.6
 ```
 
 Poin 1–4 gak bikin crash — makanya ditulis eksplisit. Tiap nyentuh `PMPredictor`, `OpenMeteoService`, atau `ORSRoutingService`, cek ulang list ini.
@@ -199,6 +206,8 @@ Rute pendek (< threshold total) → 1 fetch. Rute panjang → jumlah fetch **eme
 - Kalau fetch gagal: **jangan fallback ke angka hardcode.** Tampilkan error, biarin user retry. Angka dosis palsu lebih buruk daripada gak ada angka.
 - **Jangan interpolasi antar grup.** Bukan karena batas grup itu "jujur" — klaim lama itu udah gak berlaku, karena Open-Meteo kemungkinan udah interpolasi sendiri. Alasannya sekarang lebih sederhana: yang kita kontrol adalah granularitas grup fetch kita sendiri, dan nambah interpolasi di atasnya cuma nambah lapisan tebakan tanpa dasar.
 
+**Clustering di planning mode (banyak rute sekaligus):** algoritma di atas ditulis buat satu rute berurutan, tapi `RouteExposureEstimator` ngestimasi sampai 3 rute alternatif dalam satu cap 8 fetch. `SegmentFetchGrouper` jalan per rute dulu (tetap sekuensial sesuai urutan rute masing-masing), abis itu titik referensi antar rute yang jaraknya ≤ `fetchGroupingRadiusMeters` satu sama lain di-merge jadi satu titik fetch — pakai uji jarak yang sama persis, bukan aturan baru. Buat rute alternatif Jabodetabek yang saling tumpang tindih (kasus umum), ini biasanya kolaps jadi 1 fetch. Implementasi: `RouteExposureEstimator.mergeGroupsAcrossRoutes`.
+
 ### 4.3 `PMPredictor`
 
 Wrapper `CleanRoutePM25.mlmodel`.
@@ -258,19 +267,30 @@ Ini sumber `tᵢ` di live mode. **Event-based segment timer**, bukan rekonstruks
 - Akumulasi per index segmen, bukan overwrite. Segmen bisa dilewati lebih dari sekali.
 - Simpan juga durasi berhenti (kecepatan ≈ 0). Dosis pas berhenti di lampu merah **tetap dihitung** — user tetap napas.
 
+**Jarak tempuh (`distanceKm`):** dihitung terpisah dari waktu, dengan gate akurasi (`≤ traceMaximumAccuracyMeters`) dan lantai perpindahan minimum (`DoseConstants.minimumMovementMeters`, 5m) berbasis anchor — titik pembanding cuma maju kalau perpindahan kumulatif dari anchor ≥ lantai itu. Ini nyegah GPS jitter pas diam nambahin jarak semu (BestForNavigation + `distanceFilter = kCLDistanceFilterNone` ngeluarin fix per beberapa ratus ms, masing-masing meleset beberapa meter). Cuma motong `distanceKm`/`speedLabel` — **gak pernah** motong `segmentDurations`, jadi kontrak "durasi berhenti tetap dihitung" di atas gak kesentuh.
+
+**Window pencarian map-matching:** `closestMatch` cari titik terdekat di sekitar `activeSegmentIndex` dulu (radius kecil dalam satuan segmen), baru melebar 4× tiap gagal nemu match dalam `DoseConstants.localMatchWindowMeters` (150m) — **bukan** langsung full-scan begitu > `offRouteDistanceMeters` (50m). Alasan: off-route status (>50m) beda sama "GPS gak nemu titik lokal yang masuk akal" (>150m). Kalau langsung full-scan begitu off-route, di rute yang muter balik deket dirinya sendiri (round trip, jalur paralel), scan bisa nemu titik terdekat secara global di bagian rute yang jauh berbeda — segmen aktif meloncat ke tempat salah, dan aturan anti-flapping di atas ke-bypass karena datang dari window yang beda sama sekali. Full-scan cuma dipakai pas `activeSegmentIndex == nil` (fix GPS pertama di ride, belum ada anchor buat window lokal).
+
+**Pause (`pauseTracking()` / `resumeTracking()`):** pause nge-reset anchor jam (`lastUpdateUptime`), anchor jarak (`lastLocation`), dan anchor jejak (`lastTraceLocation`) di `RideTracker` lewat `RideTracker.pause()`. Tanpa ini, fix GPS pertama setelah resume ngitung `delta = now − lastUpdateUptime` = **seluruh durasi pause**, nyuntik waktu (dan dosis) fiktif ke segmen aktif. **Gap GPS yang bukan dari tombol Pause** (terowongan, app di-suspend, sinyal ilang) **tetap dihitung penuh, gak di-clamp** — beda dari pause. Alasannya: "durasi berhenti tetap dihitung" di atas berlaku juga buat gap sinyal selama ride beneran jalan; yang di-reset cuma pause eksplisit, karena tombol Pause artinya user nyuruh ride-nya disuspend.
+
 **Off-route (deviasi rute):**
 
-- Jarak tegak lurus ke polyline > 50m selama > 15 detik → status `offRoute`.
-- **v1: terima gapnya.** Waktu selama off-route diakumulasi ke bucket `unattributedDuration`, gak dibebankan ke segmen manapun.
-- Tampilkan di ringkasan: "X menit di luar rute — gak dihitung dalam dosis". Jangan diam-diam dihilangkan, jangan juga dikarang.
-- Balik ke dalam 50m → lanjut dari segmen hasil proyeksi saat itu.
+> **Revisi (v3), gantiin v1 (exclude) dan v2 (freeze ke segmen terakhir).** Keduanya udah gak berlaku.
+
+- Jarak tegak lurus ke polyline > 50m dari rute → status `offRoute`. **Ini flag UI doang** (`MapNavigationStats` nampilin `"Off route"`) — **gak boleh ada cabang logic terpisah** buat map-matching atau akumulasi waktu berdasarkan flag ini.
+- Map-matching (§4.6 atas: proyeksi ke polyline → index segmen → cek transisi pakai aturan anti-flapping yang sama) **jalan identik**, off-route atau enggak. Selama proyeksi belum lewat ambang transisi ke segmen berikutnya, waktu terus keakumulasi ke segmen aktif yang sama — off-route tapi belum "masuk" segmen baru = dianggap masih di situ. Begitu proyeksi lewat ambang, segmen aktif pindah seperti biasa, walau posisi fisik user masih > 50m dari polyline.
+- **Hapus `attributeToActiveSegment` dan cabang khusus off-route dari implementasi v2.** Gak ada lagi bedanya "waktu off-route" vs "waktu on-route" secara kode — cuma beda status flag yang dibaca View buat nampilin indikator. Ini perubahan kode, bukan cuma dokumentasi — kalau `attributeToActiveSegment` masih ada di `RideTracker`, itu artefak v2 yang harus dicabut.
+- `unattributedDuration` tetap selalu 0 / dead field di `RideTrackingSnapshot`/`RideRecord`/`TripSummary`, dipertahankan buat kompatibilitas struct doang. Alasannya sekarang lebih simpel dari v2: bukan "di-freeze ke tempat lain", tapi karena emang gak pernah ada cabang yang butuh bucket terpisah.
+- `DoseConstants.offRouteGraceSeconds` tetap unused, belum dibersihin (sama kayak sebelumnya).
+- Trade-off yang disadari (masih sama kayak v2): `Cᵢ` yang dipakai buat waktu off-route adalah `Cᵢ` segmen aktif menurut proyeksi terakhir, bukan konsentrasi aktual di lokasi fisik user. Makin jauh/lama nyimpang, makin gak representatif.
+- Gak ada lagi konsep "balik ke dalam 50m → lanjut dari segmen hasil proyeksi" sebagai event terpisah — gak pernah ada jeda pemrosesan yang perlu dilanjutkan, proyeksi jalan terus tanpa henti dari awal sampai akhir ride.
 
 **Pergantian jam WIB:**
 
 - Ride sepeda gampang lewat batas jam. `hour_of_day` adalah fitur ML terkuat kedua (20% importance) dan pola bias CAMS berubah tajam sore–malam.
 - Waktu jam WIB berganti selama ride: re-fetch Open-Meteo untuk **grup aktif** dan re-prediksi `C_base`. Segmen yang udah selesai **tetap** pakai `C_base` yang berlaku waktu itu — jangan di-retro-fit.
 
-**Output:** `RideRecord` di `Models/` — durasi per segmen, `C_base` yang dipakai, `unattributedDuration`, flag interpolasi, total dosis aktual.
+**Output:** `RideRecord` di `Models/` — durasi per segmen, `C_base` yang dipakai, `unattributedDuration` (dead field, selalu 0, gak pernah keisi — lihat di atas), flag interpolasi, total dosis aktual. Dipanggil sekali di akhir ride (`MapNavigationViewModel.finishRide()`, setelah `apply()` terakhir kelar) dan `segmentConcentrations`/`segmentDurationsSeconds`-nya disalin ke `TripSummary` buat dipersist lewat `TripHistoryStore` — sebelumnya `makeRideRecord()` gak punya pemanggil sama sekali dan datanya kebuang tiap ride selesai.
 
 ### 4.7 `DoseCalculator` & `DoseConstants`
 
@@ -279,12 +299,13 @@ Murni fungsi, no networking, no state.
 ```
 Cᵢ         = C_base(grup) × M_road,ᵢ × M_green,ᵢ
 tᵢ         = planning : ETA_total × (distanceᵢ / Σ distance)
-             live     : durasi terukur RideTracker
-exposure   = Σ (Cᵢ × tᵢ_menit)
-dose_µg    = VE × exposure
+             live     : durasi terukur RideTracker (kumulatif), dipecah jadi Δtᵢ per update
+exposure   = Σ (Cᵢ × tᵢ_menit)                     ← dipakai buat RANKING, planning mode aja
+dose_µg    = planning : VE × exposure              ← VE konstan, boleh di luar Σ
+             live     : Σᵢ (VEᵢ × Cᵢ × tᵢ_menit), diakumulasi INKREMENTAL per Δtᵢ & VE_sekarang
 ```
 
-- Ranking pakai `exposure`, bukan `dose_µg` (VE konstan → cancel).
+- Ranking pakai `exposure` di planning mode, bukan `dose_µg` (VE konstan → cancel). Live mode gak ada ranking — cuma ngelaporin dosis aktual.
 - `congestion_ratio` = **1.0 seragam** di planning mode, jadi bobot waktu = proporsi jarak murni. Ini keputusan terukur, bukan kelalaian: simulasi Monte Carlo nunjukin 0 dari 30 ranking flip. **Jangan bangun tabel lookup 144-cell** — apalagi sekarang, karena live mode ngukur waktu beneran.
 - Gate signifikansi: kalau `(exposure_max − exposure_min) / exposure_min < 0.20` → semua rute ditandai **"paparan setara"**, tiebreak ke **waktu tempuh tercepat** (bukan jarak terpendek).
 - Detour cap: buang kandidat dengan `ETA > 1.5 × ETA_tercepat`. Untuk sepeda 1.5× itu tenaga yang gak sedikit — kalau ternyata kerasa terlalu longgar di uji coba, turunin dan catat di sini.
@@ -292,11 +313,13 @@ dose_µg    = VE × exposure
 **`VE` — laju ventilasi**
 
 ```
-VE = 0.040 m³/min   (40 L/min)
+VE = 0.040 m³/min   (40 L/min)     ← fallback
 ```
 
-- Konstanta ini **fallback yang dipakai sekarang dan seterusnya** kalau data heart rate gak tersedia.
-- Desain dari sekarang: protokol `VentilationRateProvider` di `Services/`, dengan implementasi `ConstantVentilationRate` (0.040). Implementasi berbasis heart rate nyusul lewat HealthKit — rumusnya belum ada, **jangan dikarang**.
+- Fallback dipakai kalau HealthKit gak diotorisasi, Apple Watch gak kepasang, HR ≤ 30 bpm, atau input formula HR-based gak lengkap.
+- **HR-based VE udah dipilih dan diimplementasi** — bukan lagi open item. Formula: Greenwald et al. 2019 (RUMUS.md §2.1.1), input HR + age + sex + FVC. `FVC` diestimasi pakai South Asian reference equations, Leong et al. 2022 (RUMUS.md §2.1.2) kalau gak ada FVC terukur di HealthKit.
+- Implementasi: protokol `VentilationRateProvider` di `Services/`, `ConstantVentilationRate` (0.040, fallback) + `HealthKitVentilationRateProvider` (HR-based) + `MinuteVentilationEstimator`. HR live dari Apple Watch (`HKWorkoutSession` + `HKLiveWorkoutBuilder`) lewat WatchConnectivity, throttled maks 1× per 5 detik. `FVC` dihitung sekali per ride, gak berubah-ubah sepanjang ride. `V̇E` dihitung ulang tiap `apply()` dipanggil di `LiveRideDoseSession`, pakai HR saat itu.
+- **Konsekuensi kritis:** `VE` sekarang bisa berubah-ubah tiap panggilan `apply()`. Live mode WAJIB akumulasi dosis inkremental per-Δt (kontrak §3 poin 8) — `VE` gak boleh ditarik keluar Σ kayak planning mode. Baca RUMUS.md §1 kalau butuh penjelasan lengkap kenapa dua bentuk itu gak lagi ekuivalen begitu `VE` gak konstan.
 - Nilai lama 0.014 m³/min (aktivitas ringan / dalam kendaraan) **udah gak berlaku** — itu buat pengendara motor yang duduk diam.
 
 **`F_moda` — TIDAK DIPAKAI**
@@ -349,6 +372,7 @@ Efek gabungan sama perubahan `VE`: `0.014 × 1.5 = 0.021` → `0.040`, angka dos
 - Tipe stasiun training belum diverifikasi (roadside vs background) → risiko double counting di `M_road`.
 - PM2.5 itu polutan yang lemah buat membedakan rute. Penanda yang kuat adalah black carbon dan UFP (diskriminasi 2,5× dan 1,9×), dan dua-duanya gak tersedia di CAMS.
 - Model dilatih & divalidasi di Jabodetabek. `roads_data.json` juga cuma nutup Jabodetabek. Rute sepeda di luar itu = ekstrapolasi.
+- **Dosis selama off-route pakai `Cᵢ` segmen aktif menurut proyeksi, bukan konsentrasi aktual di lokasi user** (§4.6). Makin jauh/lama nyimpang dari rute, makin gak representatif — trade-off yang disadari, bukan bug.
 
 ---
 
@@ -362,7 +386,9 @@ Efek gabungan sama perubahan `VE`: `0.014 × 1.5 = 0.021` → `0.040`, angka dos
 - **Jangan bikin tabel congestion 144-cell.** Lihat §4.7.
 - **Jangan pakai `MKDirections` buat routing.** Cuma ORS.
 - **Jangan panggil OpenAQ dari app.** Itu sumber label training, gak pernah runtime.
-- **Jangan ngarang rumus VE berbasis heart rate.** Tunggu rumusnya ada.
+- **Jangan ganti formula VE HR-based atau estimasi FVC tanpa proses evaluasi kandidat kayak yang udah dilakuin** (RUMUS.md §2.1.1/§2.1.2). Greenwald et al. 2019 + Leong et al. 2022 udah dipilih & diimplementasi — bukan placeholder.
+- **Jangan tarik `VE` keluar Σ di live mode.** Begitu VE HR-based, itu ngerusak akumulasi dosis (lihat bug yang udah kejadian, RUMUS.md §2.1.1). Live mode wajib inkremental per-Δt.
+- **Jangan bikin cabang khusus buat off-route** (exclude ke `unattributedDuration`, freeze ke `activeSegmentIndex`, atau apapun). Off-route cuma flag UI — lihat §4.6.
 - **Jangan over-engineer.** Kalau solusi paling sederhana udah lolos gate yang diukur, berhenti di situ.
 
 ---

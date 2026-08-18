@@ -19,17 +19,24 @@ actor LiveRideDoseSession {
 
     private var roadAttributesBySegment: [RoadAttributes]
     private var basePM25BySegment: [Double]
+    private let fetchGroups: [SegmentFetchGroup]
     private var lockedSegmentIndices: Set<Int> = []
     private var currentWIBHour: Int?
     private let wibTimeZone: TimeZone
     private var previousSegmentDurationsSeconds: [TimeInterval]
     private var accumulatedDoseMicrograms: Double = 0
+    private var doseBySegment: [Double]
+    private var exposureBySegment: [Double]
+    private var hourRolloverCount = 0
+    private var lastVentilationRate: Double = 0
+    private var lastHeartRateBPM: Double = 0
 
     init(
         segments: [RouteSegment],
         weatherService: OpenMeteoProviding = OpenMeteoService(),
         predictor: PMPredicting? = nil,
         roadDataStore: RoadDataProviding? = nil,
+        fetchGrouper: SegmentFetchGrouping = SegmentFetchGrouper(),
         ventilationRateProvider: VentilationRateProvider = ConstantVentilationRate()
     ) async throws {
         guard let wibTimeZone = TimeZone(identifier: "Asia/Jakarta") else {
@@ -40,8 +47,11 @@ actor LiveRideDoseSession {
         }
 
         let resolvedRoadDataStore = try roadDataStore ?? RoadDataStore.shared ?? RoadDataStore()
-        // let resolvedPredictor = try predictor ?? PMPredictor()
         let resolvedPredictor = predictor ?? RemotePMPredictor()
+        let resolvedFetchGroups = fetchGrouper.makeGroups(from: segments)
+        guard resolvedFetchGroups.count <= DoseConstants.maxFetchGroupsPerRequest else {
+            throw ExposureEstimationError.routeOutsideValidatedCoverage
+        }
 
         self.segments = segments
         self.weatherService = weatherService
@@ -49,11 +59,14 @@ actor LiveRideDoseSession {
         self.roadDataStore = resolvedRoadDataStore
         self.ventilationRateProvider = ventilationRateProvider
         self.wibTimeZone = wibTimeZone
+        self.fetchGroups = resolvedFetchGroups
         self.roadAttributesBySegment = try segments.map {
             try resolvedRoadDataStore.attributes(for: $0.midpoint)
         }
         self.basePM25BySegment = Array(repeating: 0, count: segments.count)
         self.previousSegmentDurationsSeconds = Array(repeating: 0, count: segments.count)
+        self.doseBySegment = Array(repeating: 0, count: segments.count)
+        self.exposureBySegment = Array(repeating: 0, count: segments.count)
     }
 
     func prepare(date: Date = Date()) async throws {
@@ -76,16 +89,23 @@ actor LiveRideDoseSession {
             let deltaDurationsMinutes = zip(snapshot.segmentDurations, previousSegmentDurationsSeconds).map {
                 max(0, $0 - $1) / 60
             }
-            let deltaExposure = DoseCalculator.exposure(
-                concentrations: concentrations,
-                durationsMinutes: deltaDurationsMinutes
-            )
             let currentVentilationRate = ventilationRateProvider.ventilationRate(heartRateBPM: heartRateBPM)
+
+            var deltaExposure = 0.0
+            for index in deltaDurationsMinutes.indices {
+                let contribution = concentrations[index] * deltaDurationsMinutes[index]
+                exposureBySegment[index] += contribution
+                doseBySegment[index] += currentVentilationRate * contribution
+                deltaExposure += contribution
+            }
+
             accumulatedDoseMicrograms += DoseCalculator.doseMicrograms(
                 exposure: deltaExposure,
                 ventilationRate: currentVentilationRate
             )
             previousSegmentDurationsSeconds = snapshot.segmentDurations
+            lastVentilationRate = currentVentilationRate
+            lastHeartRateBPM = heartRateBPM
 
             return LiveDoseSnapshot(
                 doseMicrograms: accumulatedDoseMicrograms,
@@ -102,13 +122,20 @@ actor LiveRideDoseSession {
             segmentConcentrations: segmentConcentrations(),
             unattributedDurationSeconds: snapshot.unattributedDuration,
             interpolatedSegmentFlags: snapshot.interpolatedSegmentFlags,
-            totalDoseMicrograms: doseMicrograms
+            totalDoseMicrograms: doseMicrograms,
+            segmentDoseMicrograms: doseBySegment,
+            segmentExposures: exposureBySegment,
+            modelVersion: predictor.modelVersion,
+            lastVentilationRate: lastVentilationRate,
+            lastHeartRateBPM: lastHeartRateBPM,
+            hourRolloverCount: hourRolloverCount
         )
     }
 
     private func refreshIfHourChanged(date: Date, activeSegmentIndex: Int?) async throws {
         let hour = wibHour(for: date)
         guard currentWIBHour != hour else { return }
+        hourRolloverCount += 1
 
         if let activeSegmentIndex {
             for index in 0..<activeSegmentIndex {
@@ -121,51 +148,34 @@ actor LiveRideDoseSession {
     }
 
     private func refreshUnlockedBasePM25(date: Date) async throws {
-        var unlockedCells = Set<CAMSCell>()
-        for (index, segment) in segments.enumerated() where !lockedSegmentIndices.contains(index) {
-            unlockedCells.insert(CAMSCell(coordinate: segment.midpoint))
+        let unlockedGroups = fetchGroups.filter { group in
+            group.segmentIndices.contains { !lockedSegmentIndices.contains($0) }
         }
 
-        guard unlockedCells.count <= DoseConstants.maxCAMSCellsPerRequest else {
+        guard unlockedGroups.count <= DoseConstants.maxFetchGroupsPerRequest else {
             throw ExposureEstimationError.routeOutsideValidatedCoverage
         }
 
-        let orderedCells = Array(unlockedCells)
-        var snapshotsByCell: [CAMSCell: WeatherSnapshot] = [:]
-        for cell in orderedCells {
-            snapshotsByCell[cell] = try await weatherService.weather(at: cell.centroid, date: date)
-        }
-        let snapshots = orderedCells.compactMap { snapshotsByCell[$0] }
-        guard snapshots.count == orderedCells.count else {
-            throw ExposureEstimationError.unavailableData
+        var snapshots: [WeatherSnapshot] = []
+        snapshots.reserveCapacity(unlockedGroups.count)
+        for group in unlockedGroups {
+            snapshots.append(try await weatherService.weather(at: group.referenceCoordinate, date: date))
         }
 
-        // var basePM25ByCell: [CAMSCell: Double] = [:]
-        // for cell in unlockedCells {
-        //     let weather = try await weatherService.weather(at: cell.centroid, date: date)
-        //     do {
-        //         basePM25ByCell[cell] = try predictor.predict(snapshot: weather, date: date)
-        //     } catch {
-        //         throw ExposureEstimationError.modelPredictionFailed
-        //     }
-        // }
         let predictions: [Double]
         do {
             predictions = try await predictor.predict(snapshots: snapshots, date: date)
         } catch {
             throw ExposureEstimationError.modelPredictionFailed
         }
-        guard predictions.count == orderedCells.count else {
+        guard predictions.count == unlockedGroups.count else {
             throw ExposureEstimationError.modelPredictionFailed
         }
-        let basePM25ByCell = Dictionary(uniqueKeysWithValues: zip(orderedCells, predictions))
 
-        for (index, segment) in segments.enumerated() where !lockedSegmentIndices.contains(index) {
-            let cell = CAMSCell(coordinate: segment.midpoint)
-            guard let basePM25 = basePM25ByCell[cell] else {
-                throw ExposureEstimationError.unavailableData
+        for (group, basePM25) in zip(unlockedGroups, predictions) {
+            for segmentIndex in group.segmentIndices where !lockedSegmentIndices.contains(segmentIndex) {
+                basePM25BySegment[segmentIndex] = basePM25
             }
-            basePM25BySegment[index] = basePM25
         }
     }
 

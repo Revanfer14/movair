@@ -23,6 +23,9 @@ struct AppTabView: View {
                 .tag(Tab.history)
         }
         .tint(Color.Brand.blue700)
+        .task {
+            await RideRecordArchiver.shared.drainPending()
+        }
     }
 }
 

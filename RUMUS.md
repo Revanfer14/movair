@@ -310,12 +310,16 @@ Perilaku: user masuk segmen-1 → timer segmen-1 mulai dari 0. User keluar zona 
 
 **Off-route:**
 
-- Jarak tegak lurus ke polyline > 50m selama > 15 detik → status `offRoute`.
-- **v1: terima gapnya.** Waktu off-route masuk bucket `unattributedDuration`, gak dibebankan ke segmen manapun.
-- Tampilkan di ringkasan: "X menit di luar rute — gak dihitung dalam dosis". Jangan diam-diam dihilangkan, jangan juga dikarang.
-- Balik ke dalam 50m → lanjut dari segmen hasil proyeksi saat itu.
+> **Revisi.** Ini keputusan produk terbaru, menggantikan dua versi sebelumnya: draf awal dokumen ini ("v1" — exclude ke `unattributedDuration`), dan implementasi interim yang sempat jalan di kode ("v2" — freeze ke `activeSegmentIndex` terakhir via `attributeToActiveSegment`). Dua-duanya udah gak berlaku.
 
-**Kontrak:** di live mode `Σ tᵢ` = durasi aktual terukur, dan **tidak dipaksa** sama dengan `ETA_total_ORS`. Beda antara keduanya itu informasi, bukan error.
+- Jarak tegak lurus ke polyline > 50m selama > 15 detik → status `offRoute`. **Ini murni flag informasional buat UI** (nampilin "lagi di luar rute" ke user) — status ini **tidak mengubah cara `tᵢ` dihitung sama sekali**.
+- Map-matching & timer segmen (aturan di atas: proyeksi ke polyline, index segmen dari jarak kumulatif, anti-flapping ≥20m lewat batas) **jalan identik**, off-route atau enggak. Gak ada cabang kode terpisah buat kondisi ini.
+- Selama proyeksi posisi masih nunjuk ke segmen aktif yang sama (belum ada transisi valid) → waktu terus keakumulasi ke segmen itu. User off-route tapi belum "masuk" segmen berikutnya = dianggap masih di segmen yang sama, persis kayak kalau dia di jalur.
+- Begitu proyeksi lewat ambang transisi ke segmen berikutnya → segmen aktif pindah seperti biasa, walau posisi fisik user masih > 50m dari polyline. Gak ada syarat "harus balik ke jalur dulu" buat transisi kejadian.
+- Gak ada bucket `unattributedDuration` lagi — semua waktu, off-route atau enggak, selalu dibebankan ke suatu segmen lewat proyeksi normal. Gak perlu ditampilkan sebagai "X menit gak dihitung" karena memang gak ada waktu yang dibuang.
+- **Trade-off yang disadari:** `Cᵢ` yang dipakai buat waktu off-route adalah `Cᵢ` segmen yang lagi aktif menurut proyeksi terakhir, bukan konsentrasi aktual di lokasi fisik user. Makin jauh/makin lama nyimpang dari rute, makin gak representatif nilai itu. Ini trade-off yang sama kayak versi "v2" sebelumnya — cuma sekarang gak ada logic freeze terpisah, jadi konsekuensinya lebih konsisten diprediksi.
+
+**Kontrak:** di live mode `Σ tᵢ` = durasi aktual terukur, dan **tidak dipaksa** sama dengan `ETA_total_ORS`. Beda antara keduanya itu informasi, bukan error. Off-route **tidak** mengurangi `Σ tᵢ` — lihat kontrak #10 di §8.
 
 ---
 
@@ -374,6 +378,8 @@ Kesalahan di poin 1–4 bikin app **diam-diam salah tanpa error** — gak crash,
 8. Fetch CAMS pakai clustering jarak (§3.1)  ← BUKAN floor(lat/0.4), floor(lon/0.4)
 9. Live mode: dosis diakumulasi INKREMENTAL per update (Δdosis += VE_sekarang × Σ(Cᵢ×Δtᵢ))
    ← BUKAN VE_sekarang × exposure_seluruh_riwayat dihitung ulang tiap update (§1, §2.1.1)
+10. Off-route BUKAN kondisi khusus buat map-matching/timer (§5.2)
+    ← jangan exclude ke unattributedDuration, jangan freeze ke "segmen aktif terakhir" — proyeksi & transisi jalan sama kayak on-route
 ```
 
 ---
@@ -388,6 +394,7 @@ Kesalahan di poin 1–4 bikin app **diam-diam salah tanpa error** — gak crash,
 - **Tipe stasiun training belum diverifikasi** (roadside vs background) → risiko double counting di `M_road`, lihat §4.3.
 - **PM2.5 itu polutan yang lemah buat membedakan rute.** Literatur nunjukin diskriminasi antar rute high/low traffic cuma ~1,15×, karena PM2.5 didominasi background regional; penanda yang kuat adalah black carbon dan UFP (2,5× dan 1,9×), dan dua-duanya gak tersedia di CAMS. Ini konsisten dengan temuan internal: arah tebakan cuma **43,75%** benar di pasangan rute kontras ekstrem. Konsekuensinya banyak pasangan rute bakal keluar "paparan setara" — itu gate 20% kerja sesuai desain, bukan bug.
 - **Threshold clustering CAMS (20 km) masih provisional** (§3.1) — belum divalidasi lewat sampling sistematis sepanjang rute. Belum tau apakah perubahan `base_pm25` di lapangan itu gradual (threshold kecil lebih tepat) atau ada lompatan tajam di titik tertentu (threshold perlu disesuaikan ke situ). Jangan klaim threshold ini akurat sebelum divalidasi.
+- **Dosis selama off-route (§5.2) pakai `Cᵢ` segmen aktif menurut proyeksi, bukan konsentrasi aktual di lokasi user.** Makin jauh/lama nyimpang dari rute, makin gak representatif. Ini trade-off yang disadari, bukan bug — alternatifnya (exclude waktu, atau freeze ke segmen lama) dianggap lebih buruk karena user tetap bernapas selama off-route.
 - Boleh klaim: _"rute dengan komposisi jalan dan waktu tempuh yang paparannya lebih rendah"_. **Tidak boleh** klaim: _"kami menemukan area yang udaranya lebih bersih"_.
 
 ---
@@ -409,6 +416,7 @@ Kesalahan di poin 1–4 bikin app **diam-diam salah tanpa error** — gak crash,
 | 11  | Resolusi CAMS ditulis 11 km di `v4-summary.md`                              | **0.4° ≈ 44 km (nominal)**                                   | 11 km = CAMS Europe. Indonesia pakai CAMS global                                                                                                                                                                                                                                                                                                                  |
 | 12  | Dedup fetch CAMS pakai `floor(lat/0.4), floor(lon/0.4)` (grid quantization) | **Clustering berbasis jarak, threshold 20 km (provisional)** | Empiris: dua titik yang menurut floor-division satu cell yang sama ngasih `base_pm25` beda jauh (52,5 vs 40,2, rute uji `-6.262199,106.668267` → `-6.177820,106.790758`, 120 segmen). Grid quantization gak valid buat granularitas Open-Meteo yang sebenarnya — kemungkinan API-nya interpolasi internal, atau grid asli gak align ke kelipatan 0.4°. Lihat §3.1 |
 | 13  | Live mode: `dosis = VE(HR_sekarang) × exposure_kumulatif_seluruh_riwayat`, dihitung ulang dari nol tiap update lokasi | **Akumulasi inkremental**: `dosis_total += VE(HR_sekarang) × Σ(Cᵢ × Δtᵢ)`, `Δtᵢ` = durasi baru sejak update terakhir | `VE` berbasis HR (§2.1.1) berubah-ubah sepanjang ride begitu diimplementasi. Versi lama nge-*retroactively rescale* seluruh riwayat paparan pakai HR sesaat pas query — porsi waktu dari 2 jam lalu ikut kena HR barusan. Ini contoh nyata kenapa `VE` harus di dalam Σ kalau gak konstan (§1) |
+| 14  | Off-route: waktu di-exclude ke `unattributedDuration` (v1), lalu direvisi jadi freeze ke `activeSegmentIndex` terakhir via `attributeToActiveSegment` (v2, cuma sempat ada di kode/CLAUDE.md) | **Off-route bukan kondisi khusus sama sekali** — map-matching & timer segmen jalan identik on-route/off-route, waktu ngikut proyeksi posisi biasa (§5.2) | User tetap bernapas selama off-route, jadi waktunya harus tetap kehitung (menyingkirkan v1). Tapi freeze ke segmen lama (v2) bikin logic bercabang dan gak perlu — proyeksi normal ke polyline udah otomatis ngasih index segmen yang masuk akal walau posisi jauh dari rute, jadi cabang khusus cuma nambah kompleksitas tanpa manfaat |
 
 Efek gabungan item 2 + 3 ke angka dosis absolut: `0.014 × 1.5 = 0.021` → `0.040`, naik **~1,9×**. Ranking gak berubah sama sekali.
 

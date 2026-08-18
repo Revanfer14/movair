@@ -6,6 +6,12 @@ struct TripSummaryView: View {
     var onDismiss: () -> Void
 
     @State private var recenterTrigger = false
+    @State private var shareImage: UIImage?
+    @State private var isRenderingShareCard = false
+    @State private var isShareSheetPresented = false
+    @State private var shareErrorMessage: String?
+
+    private let shareImageRenderer: TripShareImageRendering = TripShareImageRenderer()
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -23,15 +29,68 @@ struct TripSummaryView: View {
             .ignoresSafeArea(edges: .top)
 
             VStack(spacing: 0) {
-                PrimaryButton(title: "Got it", action: onDismiss)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 16)
-                    .padding(.top, 8)
+                HStack(spacing: 12) {
+                    shareButton
+                    PrimaryButton(title: "Got it", action: onDismiss)
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 16)
+                .padding(.top, 8)
             }
             .frame(maxWidth: .infinity)
             .background(Color(.systemGroupedBackground))
         }
         .toolbar(.hidden, for: .tabBar)
+        .sheet(isPresented: $isShareSheetPresented) {
+            if let shareImage {
+                ShareSheet(items: [shareImage])
+            }
+        }
+        .alert(
+            "Couldn't create share image",
+            isPresented: Binding(
+                get: { shareErrorMessage != nil },
+                set: { if !$0 { shareErrorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { shareErrorMessage = nil }
+        } message: {
+            Text(shareErrorMessage ?? "")
+        }
+    }
+
+    private var shareButton: some View {
+        Button(action: shareTrip) {
+            Group {
+                if isRenderingShareCard {
+                    ProgressView()
+                } else {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(Font.Brand.bodyBold)
+                }
+            }
+            .frame(width: 52, height: 52)
+            .foregroundStyle(Color.Brand.labelPrimary)
+            .background(Color(.secondarySystemGroupedBackground), in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(isRenderingShareCard || trip.displayCoordinates.count < 2)
+        .opacity(trip.displayCoordinates.count < 2 ? 0.5 : 1)
+        .accessibilityLabel("Share ride")
+    }
+
+    private func shareTrip() {
+        guard !isRenderingShareCard else { return }
+        isRenderingShareCard = true
+        Task {
+            defer { isRenderingShareCard = false }
+            do {
+                shareImage = try await shareImageRenderer.makeImage(for: trip)
+                isShareSheetPresented = true
+            } catch {
+                shareErrorMessage = "Couldn't render this ride as an image. Please try again."
+            }
+        }
     }
 
     private var headerSection: some View {
@@ -83,13 +142,6 @@ struct TripSummaryView: View {
                     .font(Font.Brand.footnote)
                     .foregroundStyle(Color.Brand.darkgray)
                     .fixedSize(horizontal: false, vertical: true)
-
-                if let unattributedDurationLabel = trip.unattributedDurationLabel {
-                    Text(unattributedDurationLabel)
-                        .font(Font.Brand.footnote)
-                        .foregroundStyle(Color.Brand.primaryOrange)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.trailing, 12)
@@ -121,6 +173,20 @@ struct TripSummaryView: View {
         .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 4)
     }
 
+    private var originMarkerCoordinate: CLLocationCoordinate2D? {
+        trip.originCoordinate ?? trip.displayCoordinates.first
+    }
+
+    private var destinationMarkerCoordinate: CLLocationCoordinate2D? {
+        trip.destinationCoordinate ?? trip.displayCoordinates.last
+    }
+
+    private var traceCaption: String {
+        trip.hasActualTrace
+            ? "Rute jejak GPS selama gowes"
+            : "Rencana rute — jejak GPS belum tersedia"
+    }
+
     private var exposureValueColor: Color {
         switch trip.exposureLevel {
         case .low: return Color.Brand.primaryGreen
@@ -147,11 +213,14 @@ struct TripSummaryView: View {
 
             MapViewComponent(
                 recenterTrigger: $recenterTrigger,
-                centerCoordinate: trip.coordinates.first,
+                centerCoordinate: trip.displayCoordinates.first,
                 showsUserLocation: false,
-                routeCoordinates: trip.coordinates,
-                originCoordinate: trip.coordinates.first,
-                destinationCoordinate: trip.coordinates.last,
+                routeCoordinates: trip.displayCoordinates,
+                plannedRouteCoordinates: trip.hasActualTrace ? trip.coordinates : [],
+                isTraceMeasured: trip.hasActualTrace,
+                breaksTraceAtGaps: true,
+                originCoordinate: originMarkerCoordinate,
+                destinationCoordinate: destinationMarkerCoordinate,
                 fitsRouteInView: true,
                 routeEdgePadding: UIEdgeInsets(top: 24, left: 24, bottom: 24, right: 24),
                 showsOriginMarker: true
@@ -163,6 +232,11 @@ struct TripSummaryView: View {
                 Text(trip.routeTitle)
                     .font(Font.Brand.bodyBold)
                     .foregroundStyle(Color.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(traceCaption)
+                    .font(Font.Brand.footnote)
+                    .foregroundStyle(Color.Brand.darkgray)
                     .fixedSize(horizontal: false, vertical: true)
 
                 MapRouteMetricRow(items: [

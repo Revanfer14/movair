@@ -3,6 +3,7 @@ import Foundation
 protocol MovairAPI: Sendable {
     func predict(rows: [PredictRow]) async throws -> PredictResponse
     func archiveRoutePlan(_ payload: RoutePlanPayload) async throws
+    func archiveRideRecord(bodyData: Data) async throws
 }
 
 final class MovairAPIClient: MovairAPI {
@@ -30,6 +31,12 @@ final class MovairAPIClient: MovairAPI {
     func archiveRoutePlan(_ payload: RoutePlanPayload) async throws {
         var request = try makeRequest(path: "/route-plans", includeDeviceID: true)
         request.httpBody = try JSONEncoder().encode(payload)
+        _ = try await perform(request)
+    }
+
+    func archiveRideRecord(bodyData: Data) async throws {
+        var request = try makeRequest(path: "/ride-records", includeDeviceID: true)
+        request.httpBody = bodyData
         _ = try await perform(request)
     }
 

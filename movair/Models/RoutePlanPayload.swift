@@ -5,7 +5,7 @@ struct RoutePlanPayload: Encodable {
     let createdAtWIB: String
     let modelVersion: String
     let origin: Coordinate
-    let destination: Coordinate
+    let destination: Destination
     let chosenRank: Int
     let equivalentExposure: Bool
     let weather: Weather
@@ -26,6 +26,12 @@ struct RoutePlanPayload: Encodable {
     }
 
     struct Coordinate: Encodable {
+        let lat: Double
+        let lon: Double
+    }
+
+    struct Destination: Encodable {
+        let name: String?
         let lat: Double
         let lon: Double
     }

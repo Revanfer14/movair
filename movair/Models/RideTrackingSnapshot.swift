@@ -1,4 +1,5 @@
 import Foundation
+import CoreLocation
 
 struct RideTrackingSnapshot {
     let segmentDurations: [TimeInterval]
@@ -8,4 +9,6 @@ struct RideTrackingSnapshot {
     let isOffRoute: Bool
     let activeSegmentIndex: Int?
     let interpolatedSegmentFlags: [Bool]
+    let travelledCoordinates: [CLLocationCoordinate2D]
+    let travelledTracePoints: [RideTracePoint]
 }

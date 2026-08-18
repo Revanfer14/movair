@@ -10,6 +10,7 @@ struct MapView: View {
     @ObservedObject private var tripStore = TripHistoryStore.shared
     @ObservedObject private var phoneConnectivity = PhoneConnectivityManager.shared
     private let routePlanArchiver: RoutePlanArchiving = RoutePlanArchiver()
+    private let rideRecordArchiver: RideRecordArchiving = RideRecordArchiver.shared
 
     @State private var phase: NavigationPhase = .browsing
     @State private var isSearchPresented = false
@@ -76,6 +77,7 @@ struct MapView: View {
                     if !presented {
                         searchViewModel.clearSelection()
                         completedTrip = nil
+                        phoneConnectivity.resetToIdle()
                         phase = .browsing
                     }
                 }
@@ -97,6 +99,8 @@ struct MapView: View {
                     navigationStartError = nil
                     let origin = routeSelectionViewModel.originTitle
                     let destination = routeSelectionViewModel.destination?.title ?? "Destination"
+                    let planID = UUID().uuidString
+                    phoneConnectivity.resetForNewRide()
                     Task {
                         defer { isStartingNavigation = false }
                         do {
@@ -105,11 +109,12 @@ struct MapView: View {
                                 originTitle: origin,
                                 destinationTitle: destination,
                                 originCoordinate: routeSelectionViewModel.currentOriginCoordinate,
-                                destinationCoordinate: routeSelectionViewModel.destination?.coordinate
+                                destinationCoordinate: routeSelectionViewModel.destination?.coordinate,
+                                routePlanID: planID
                             )
                             locationManager.startRideTracking()
                             phase = .navigating
-                            if let payload = routeSelectionViewModel.routePlanPayload(chosenRouteID: route.id) {
+                            if let payload = routeSelectionViewModel.routePlanPayload(chosenRouteID: route.id, planID: planID) {
                                 Task.detached(priority: .background) {
                                     await routePlanArchiver.archive(payload)
                                 }
@@ -122,6 +127,7 @@ struct MapView: View {
                 },
                 onClose: {
                     searchViewModel.clearSelection()
+                    phoneConnectivity.resetToIdle()
                     phase = .browsing
                 }
             )
@@ -157,6 +163,7 @@ struct MapView: View {
                 TripSummaryView(trip: trip) {
                     searchViewModel.clearSelection()
                     completedTrip = nil
+                    phoneConnectivity.resetToIdle()
                     phase = .browsing
                 }
             } else {
@@ -174,7 +181,8 @@ struct MapView: View {
             MapViewComponent(
                 recenterTrigger: $recenterTrigger,
                 centerCoordinate: locationManager.userLocation,
-                showsUserLocation: true
+                showsUserLocation: true,
+                userHeading: locationManager.userHeading
             )
             .ignoresSafeArea()
 
@@ -261,13 +269,20 @@ struct MapView: View {
     }
 
     private func finishRide() {
-        let trip = activeNavigationViewModel.makeTripSummary(completedAt: Date())
-        tripStore.add(trip)
-        completedTrip = trip
         locationManager.stopRideTracking()
-        phoneConnectivity.resetHeartRate()
-        activeNavigationViewModel.updateHeartRate(nil)
-        phase = .tripSummary
+        Task {
+            let trip = await activeNavigationViewModel.finishRide(completedAt: Date())
+            tripStore.add(trip)
+            completedTrip = trip
+            phoneConnectivity.resetHeartRate()
+            activeNavigationViewModel.updateHeartRate(nil)
+            phase = .tripSummary
+            if let payload = activeNavigationViewModel.lastRideRecordPayload {
+                Task.detached(priority: .background) {
+                    await rideRecordArchiver.archive(payload)
+                }
+            }
+        }
     }
 
     private func pushStateToWatch() {

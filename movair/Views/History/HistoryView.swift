@@ -168,11 +168,14 @@ struct HistoryView: View {
         VStack(alignment: .leading, spacing: 10) {
             MapViewComponent(
                 recenterTrigger: .constant(false),
-                centerCoordinate: trip.coordinates.first,
+                centerCoordinate: trip.displayCoordinates.first,
                 showsUserLocation: false,
-                routeCoordinates: trip.coordinates,
-                originCoordinate: trip.coordinates.first,
-                destinationCoordinate: trip.coordinates.last,
+                routeCoordinates: trip.displayCoordinates,
+                plannedRouteCoordinates: trip.hasActualTrace ? trip.coordinates : [],
+                isTraceMeasured: trip.hasActualTrace,
+                breaksTraceAtGaps: true,
+                originCoordinate: trip.originCoordinate ?? trip.displayCoordinates.first,
+                destinationCoordinate: trip.destinationCoordinate ?? trip.displayCoordinates.last,
                 fitsRouteInView: true,
                 routeEdgePadding: UIEdgeInsets(top: 18, left: 18, bottom: 18, right: 18),
                 showsOriginMarker: true,

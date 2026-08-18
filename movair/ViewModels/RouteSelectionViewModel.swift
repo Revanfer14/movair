@@ -27,7 +27,7 @@ final class RouteSelectionViewModel: ObservableObject {
     private var routeTask: Task<Void, Never>?
     private var lastEstimationResult: RouteExposureEstimationResult?
     private var lastOrigin: CLLocationCoordinate2D?
-    private var lastDestination: CLLocationCoordinate2D?
+    private var lastDestination: SelectedDestination?
     private var lastEstimationDate: Date?
 
     init(
@@ -135,7 +135,7 @@ final class RouteSelectionViewModel: ObservableObject {
                 let result = try await estimator.estimate(routes: routesForPlanning, date: estimationDate)
                 guard !Task.isCancelled else { return }
                 self.lastOrigin = origin
-                self.lastDestination = destination.coordinate
+                self.lastDestination = destination
                 self.lastEstimationDate = estimationDate
                 self.applyFetchedRoutes(routesForPlanning, result: result)
             } catch is CancellationError {
@@ -174,20 +174,34 @@ final class RouteSelectionViewModel: ObservableObject {
         }
         let shortestDistance = ranked.map(\.distanceMeters).min() ?? 0
         let lowestDose = fetchedRoutes.compactMap { estimatesByRouteID[$0.id]?.doseMicrograms }.min() ?? 0
+        let cleanerDistance = ranked.first?.distanceMeters ?? 0
 
         routes = ranked.enumerated().map { index, route in
             let dose = estimatesByRouteID[route.id]?.doseMicrograms ?? 0
+            let isRecommended = index == 0
+
+            let title: String = {
+                if isRecommended {
+                    return "Cleaner Route"
+                } else if route.distanceMeters > cleanerDistance {
+                    return "Longer Route"
+                } else if route.distanceMeters < cleanerDistance {
+                    return "Shorter Route"
+                } else {
+                    return "Alternative Route"
+                }
+            }()
 
             return RouteOption(
                 id: route.id,
-                title: "Route \(index + 1)",
+                title: title,
                 distanceKm: route.distanceMeters / 1000,
                 durationMinutes: Int((route.durationSeconds / 60).rounded()),
                 exposureRangeUg: exposureRange(for: dose),
                 exposureLevel: ExposureLevel.from(exposureUg: Int(dose.rounded())),
                 pollutionDeltaPercent: pollutionDeltaPercent(dose: dose, comparedTo: lowestDose),
                 hasEquivalentExposure: hasEquivalentExposure,
-                isRecommended: index == 0,
+                isRecommended: isRecommended,
                 isLonger: route.distanceMeters > shortestDistance,
                 coordinates: route.coordinates,
                 steps: route.steps
@@ -262,7 +276,7 @@ final class RouteSelectionViewModel: ObservableObject {
         return Int((((dose - fastestDose) / fastestDose) * 100).rounded())
     }
 
-    func routePlanPayload(chosenRouteID: UUID) -> RoutePlanPayload? {
+    func routePlanPayload(chosenRouteID: UUID, planID: String) -> RoutePlanPayload? {
         guard let result = lastEstimationResult,
               let origin = lastOrigin,
               let destination = lastDestination,
@@ -337,11 +351,15 @@ final class RouteSelectionViewModel: ObservableObject {
         )
 
         return RoutePlanPayload(
-            id: UUID().uuidString,
+            id: planID,
             createdAtWIB: WIBTime.iso8601String(for: date),
             modelVersion: result.modelVersion,
             origin: RoutePlanPayload.Coordinate(lat: origin.latitude, lon: origin.longitude),
-            destination: RoutePlanPayload.Coordinate(lat: destination.latitude, lon: destination.longitude),
+            destination: RoutePlanPayload.Destination(
+                name: destination.title,
+                lat: destination.coordinate.latitude,
+                lon: destination.coordinate.longitude
+            ),
             chosenRank: chosenRank,
             equivalentExposure: routes.first?.hasEquivalentExposure ?? false,
             weather: weather,
