@@ -2,9 +2,16 @@ import SwiftUI
 
 struct TripShareCardView: View {
     static let cardSize = CGSize(width: 402, height: 874)
+    static let mapContentInsets = UIEdgeInsets(top: 210, left: 150, bottom: 90, right: 32)
 
     let trip: TripSummary
     let mapImage: UIImage
+
+    private var footerCaption: String {
+        trip.hasActualTrace
+            ? "Jejak GPS gowes · estimasi model CleanRoute, bukan pengukuran sensor"
+            : "Rencana rute — jejak GPS belum tersedia · estimasi model CleanRoute"
+    }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -13,6 +20,29 @@ struct TripShareCardView: View {
                 .aspectRatio(contentMode: .fill)
                 .frame(width: Self.cardSize.width, height: Self.cardSize.height)
                 .clipped()
+
+            LinearGradient(
+                stops: [
+                    .init(color: Color.Brand.white.opacity(0.95), location: 0.0),
+                    .init(color: Color.Brand.white.opacity(0.80), location: 0.34),
+                    .init(color: Color.Brand.white.opacity(0.0), location: 0.78)
+                ],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(width: Self.cardSize.width, height: Self.cardSize.height)
+            .allowsHitTesting(false)
+
+            LinearGradient(
+                stops: [
+                    .init(color: Color.Brand.white.opacity(0.0), location: 0.0),
+                    .init(color: Color.Brand.white.opacity(0.92), location: 1.0)
+                ],
+                startPoint: UnitPoint(x: 0.5, y: 0.82),
+                endPoint: .bottom
+            )
+            .frame(width: Self.cardSize.width, height: Self.cardSize.height)
+            .allowsHitTesting(false)
 
             VStack(alignment: .leading, spacing: 0) {
                 Text(trip.exposureLevel.title)
@@ -45,16 +75,19 @@ struct TripShareCardView: View {
 
                 Spacer()
 
-                Text("Estimasi model CleanRoute · bukan pengukuran sensor")
+                Text(footerCaption)
                     .font(Font.Brand.footnote)
                     .foregroundStyle(Color.Brand.darkgray)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.top, 133)
             .padding(.leading, 27)
             .padding(.bottom, 32)
+            .padding(.trailing, 27)
         }
         .frame(width: Self.cardSize.width, height: Self.cardSize.height)
         .background(Color.Brand.white)
+        .environment(\.colorScheme, .light)
     }
 
     private func statBlock(value: String, label: String) -> some View {

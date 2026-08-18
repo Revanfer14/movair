@@ -16,9 +16,11 @@ final class TripShareImageRenderer: TripShareImageRendering {
     func makeImage(for trip: TripSummary) async throws -> UIImage {
         let cardSize = TripShareCardView.cardSize
         let mapImage = try await mapSnapshotter.makeSnapshot(
-            coordinates: trip.displayCoordinates,
+            traceCoordinates: trip.travelledCoordinates,
+            plannedCoordinates: trip.coordinates,
             size: cardSize,
-            scale: 3
+            scale: 3,
+            contentInsets: TripShareCardView.mapContentInsets
         )
 
         let cardView = TripShareCardView(trip: trip, mapImage: mapImage)

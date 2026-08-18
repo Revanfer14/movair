@@ -1,6 +1,7 @@
 import Foundation
 import MapKit
 import UIKit
+import SwiftUI
 
 enum RouteMapSnapshotError: Error {
     case insufficientCoordinates
@@ -8,17 +9,37 @@ enum RouteMapSnapshotError: Error {
 }
 
 protocol RouteMapSnapshotting {
-    func makeSnapshot(coordinates: [CLLocationCoordinate2D], size: CGSize, scale: CGFloat) async throws -> UIImage
+    func makeSnapshot(
+        traceCoordinates: [CLLocationCoordinate2D],
+        plannedCoordinates: [CLLocationCoordinate2D],
+        size: CGSize,
+        scale: CGFloat,
+        contentInsets: UIEdgeInsets
+    ) async throws -> UIImage
 }
 
 final class RouteMapSnapshotter: RouteMapSnapshotting {
-    func makeSnapshot(coordinates: [CLLocationCoordinate2D], size: CGSize, scale: CGFloat) async throws -> UIImage {
-        guard coordinates.count >= 2 else {
+    private let minimumFittedSpanMeters = 600.0
+
+    func makeSnapshot(
+        traceCoordinates: [CLLocationCoordinate2D],
+        plannedCoordinates: [CLLocationCoordinate2D],
+        size: CGSize,
+        scale: CGFloat,
+        contentInsets: UIEdgeInsets
+    ) async throws -> UIImage {
+        let hasTrace = traceCoordinates.count >= 2
+        let coordinatesToFit = hasTrace ? traceCoordinates : plannedCoordinates
+        guard coordinatesToFit.count >= 2 else {
+            throw RouteMapSnapshotError.insufficientCoordinates
+        }
+
+        guard let mapRect = fittedMapRect(for: coordinatesToFit, size: size, contentInsets: contentInsets) else {
             throw RouteMapSnapshotError.insufficientCoordinates
         }
 
         let options = MKMapSnapshotter.Options()
-        options.region = paddedRegion(for: coordinates)
+        options.mapRect = mapRect
         options.size = size
         options.scale = scale
         options.mapType = .standard
@@ -29,86 +50,143 @@ final class RouteMapSnapshotter: RouteMapSnapshotting {
         let snapshotter = MKMapSnapshotter(options: options)
         let snapshot = try await snapshotter.start()
 
-        guard let composedImage = drawRoute(coordinates, on: snapshot) else {
+        guard let composedImage = drawRoute(
+            traceCoordinates: hasTrace ? traceCoordinates : [],
+            plannedCoordinates: plannedCoordinates,
+            on: snapshot
+        ) else {
             throw RouteMapSnapshotError.renderingFailed
         }
         return composedImage
     }
 
-    private func paddedRegion(for coordinates: [CLLocationCoordinate2D]) -> MKCoordinateRegion {
-        var minLatitude = coordinates[0].latitude
-        var maxLatitude = coordinates[0].latitude
-        var minLongitude = coordinates[0].longitude
-        var maxLongitude = coordinates[0].longitude
-
+    private func fittedMapRect(
+        for coordinates: [CLLocationCoordinate2D],
+        size: CGSize,
+        contentInsets: UIEdgeInsets
+    ) -> MKMapRect? {
+        var rect = MKMapRect.null
         for coordinate in coordinates {
-            minLatitude = min(minLatitude, coordinate.latitude)
-            maxLatitude = max(maxLatitude, coordinate.latitude)
-            minLongitude = min(minLongitude, coordinate.longitude)
-            maxLongitude = max(maxLongitude, coordinate.longitude)
+            let point = MKMapPoint(coordinate)
+            rect = rect.union(MKMapRect(x: point.x, y: point.y, width: 0.1, height: 0.1))
+        }
+        guard !rect.isNull, !rect.isEmpty else { return nil }
+
+        let center = MKMapPoint(x: rect.midX, y: rect.midY).coordinate
+        let metersPerMapPoint = 1 / MKMapPointsPerMeterAtLatitude(center.latitude)
+        let minimumFittedSpanMapPoints = minimumFittedSpanMeters / metersPerMapPoint
+        if rect.width < minimumFittedSpanMapPoints {
+            let deficit = minimumFittedSpanMapPoints - rect.width
+            rect = rect.insetBy(dx: -deficit / 2, dy: 0)
+        }
+        if rect.height < minimumFittedSpanMapPoints {
+            let deficit = minimumFittedSpanMapPoints - rect.height
+            rect = rect.insetBy(dx: 0, dy: -deficit / 2)
         }
 
-        let center = CLLocationCoordinate2D(
-            latitude: (minLatitude + maxLatitude) / 2,
-            longitude: (minLongitude + maxLongitude) / 2
-        )
+        let contentWidth = size.width - contentInsets.left - contentInsets.right
+        let contentHeight = size.height - contentInsets.top - contentInsets.bottom
+        guard contentWidth > 0, contentHeight > 0 else { return nil }
 
-        let paddingFactor = 1.18
-        let latitudeDelta = max((maxLatitude - minLatitude) * paddingFactor, 0.003)
-        let longitudeDelta = max((maxLongitude - minLongitude) * paddingFactor, 0.003)
+        let scaleFactor = max(rect.width / contentWidth, rect.height / contentHeight)
+        guard scaleFactor > 0, scaleFactor.isFinite else { return nil }
 
-        return MKCoordinateRegion(
-            center: center,
-            span: MKCoordinateSpan(latitudeDelta: latitudeDelta, longitudeDelta: longitudeDelta)
+        let originX = rect.midX - (contentInsets.left + contentWidth / 2) * scaleFactor
+        let originY = rect.midY - (contentInsets.top + contentHeight / 2) * scaleFactor
+
+        return MKMapRect(
+            x: originX,
+            y: originY,
+            width: size.width * scaleFactor,
+            height: size.height * scaleFactor
         )
     }
 
-    private func drawRoute(_ coordinates: [CLLocationCoordinate2D], on snapshot: MKMapSnapshotter.Snapshot) -> UIImage? {
-        let renderer = UIGraphicsImageRenderer(size: snapshot.image.size)
+    private func drawRoute(
+        traceCoordinates: [CLLocationCoordinate2D],
+        plannedCoordinates: [CLLocationCoordinate2D],
+        on snapshot: MKMapSnapshotter.Snapshot
+    ) -> UIImage? {
+        let hasTrace = traceCoordinates.count >= 2
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = snapshot.image.scale
+        let renderer = UIGraphicsImageRenderer(size: snapshot.image.size, format: format)
+
         return renderer.image { context in
             snapshot.image.draw(at: .zero)
 
-            let points = coordinates.map { snapshot.point(for: $0) }
-            guard let firstPoint = points.first, let lastPoint = points.last else { return }
+            let routeColor = UIColor(Color.Brand.blue600)
 
-            let path = UIBezierPath()
-            path.move(to: firstPoint)
-            for point in points.dropFirst() {
-                path.addLine(to: point)
+            if hasTrace, plannedCoordinates.count >= 2 {
+                strokePath(
+                    points: plannedCoordinates.map { snapshot.point(for: $0) },
+                    color: routeColor.withAlphaComponent(0.35),
+                    lineWidth: 5,
+                    dashPattern: [3, 9]
+                )
             }
-            path.lineWidth = 8
-            path.lineCapStyle = .round
-            path.lineJoinStyle = .round
-            UIColor.black.setStroke()
-            path.stroke()
 
-            drawStartMarker(at: firstPoint, in: context.cgContext)
-            drawFinishMarker(at: lastPoint, in: context.cgContext)
+            let markerPoints: [CGPoint]
+            if hasTrace {
+                let runs = RouteTraceSplitter.splitAtGaps(traceCoordinates)
+                for run in runs where run.count >= 2 {
+                    let points = run.map { snapshot.point(for: $0) }
+                    strokePath(points: points, color: .white.withAlphaComponent(0.9), lineWidth: 11, dashPattern: nil)
+                    strokePath(points: points, color: routeColor, lineWidth: 7, dashPattern: nil)
+                }
+                markerPoints = traceCoordinates.map { snapshot.point(for: $0) }
+            } else {
+                let points = plannedCoordinates.map { snapshot.point(for: $0) }
+                strokePath(points: points, color: .white.withAlphaComponent(0.9), lineWidth: 11, dashPattern: nil)
+                strokePath(points: points, color: routeColor.withAlphaComponent(0.55), lineWidth: 7, dashPattern: [4, 10])
+                markerPoints = points
+            }
+
+            guard let firstPoint = markerPoints.first, let lastPoint = markerPoints.last else { return }
+            drawStartMarker(at: firstPoint, color: routeColor, in: context.cgContext)
+            drawFinishMarker(at: lastPoint, color: routeColor, in: context.cgContext)
         }
     }
 
-    private func drawStartMarker(at point: CGPoint, in context: CGContext) {
+    private func strokePath(points: [CGPoint], color: UIColor, lineWidth: CGFloat, dashPattern: [CGFloat]?) {
+        guard let firstPoint = points.first else { return }
+        let path = UIBezierPath()
+        path.move(to: firstPoint)
+        for point in points.dropFirst() {
+            path.addLine(to: point)
+        }
+        path.lineWidth = lineWidth
+        path.lineCapStyle = .round
+        path.lineJoinStyle = .round
+        if let dashPattern {
+            path.setLineDash(dashPattern, count: dashPattern.count, phase: 0)
+        }
+        color.setStroke()
+        path.stroke()
+    }
+
+    private func drawStartMarker(at point: CGPoint, color: UIColor, in context: CGContext) {
         let radius: CGFloat = 9
         let rect = CGRect(x: point.x - radius, y: point.y - radius, width: radius * 2, height: radius * 2)
         context.setFillColor(UIColor.white.cgColor)
         context.fillEllipse(in: rect.insetBy(dx: -3, dy: -3))
-        context.setFillColor(UIColor.black.cgColor)
+        context.setFillColor(color.cgColor)
         context.fillEllipse(in: rect)
     }
 
-    private func drawFinishMarker(at point: CGPoint, in context: CGContext) {
+    private func drawFinishMarker(at point: CGPoint, color: UIColor, in context: CGContext) {
         let radius: CGFloat = 9
         let rect = CGRect(x: point.x - radius, y: point.y - radius, width: radius * 2, height: radius * 2)
         context.setFillColor(UIColor.white.cgColor)
         context.fillEllipse(in: rect.insetBy(dx: -3, dy: -3))
-        context.setFillColor(UIColor.black.cgColor)
+        context.setFillColor(color.cgColor)
         context.fillEllipse(in: rect)
 
         let flagSize: CGFloat = 28
         let flagImage = UIImage(
             systemName: "flag.checkered.circle.fill",
             withConfiguration: UIImage.SymbolConfiguration(pointSize: flagSize, weight: .bold)
-        )?.withTintColor(.black, renderingMode: .alwaysOriginal)
+        )?.withTintColor(color, renderingMode: .alwaysOriginal)
 
         flagImage?.draw(
             in: CGRect(
