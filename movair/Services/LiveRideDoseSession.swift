@@ -21,6 +21,8 @@ actor LiveRideDoseSession {
     private var lockedSegmentIndices: Set<Int> = []
     private var currentWIBHour: Int?
     private let wibTimeZone: TimeZone
+    private var previousSegmentDurationsSeconds: [TimeInterval]
+    private var accumulatedDoseMicrograms: Double = 0
 
     init(
         segments: [RouteSegment],
@@ -49,6 +51,7 @@ actor LiveRideDoseSession {
             try resolvedRoadDataStore.attributes(for: $0.midpoint)
         }
         self.basePM25BySegment = Array(repeating: 0, count: segments.count)
+        self.previousSegmentDurationsSeconds = Array(repeating: 0, count: segments.count)
     }
 
     func prepare(date: Date = Date()) async throws {
@@ -68,18 +71,22 @@ actor LiveRideDoseSession {
         )
 
         let concentrations = segmentConcentrations()
-        let durationsMinutes = snapshot.segmentDurations.map { $0 / 60 }
-        let exposure = DoseCalculator.exposure(
+        let deltaDurationsMinutes = zip(snapshot.segmentDurations, previousSegmentDurationsSeconds).map {
+            max(0, $0 - $1) / 60
+        }
+        let deltaExposure = DoseCalculator.exposure(
             concentrations: concentrations,
-            durationsMinutes: durationsMinutes
+            durationsMinutes: deltaDurationsMinutes
         )
-        let dose = DoseCalculator.doseMicrograms(
-            exposure: exposure,
-            ventilationRate: ventilationRateProvider.ventilationRate(heartRateBPM: heartRateBPM)
+        let currentVentilationRate = ventilationRateProvider.ventilationRate(heartRateBPM: heartRateBPM)
+        accumulatedDoseMicrograms += DoseCalculator.doseMicrograms(
+            exposure: deltaExposure,
+            ventilationRate: currentVentilationRate
         )
+        previousSegmentDurationsSeconds = snapshot.segmentDurations
 
         return LiveDoseSnapshot(
-            doseMicrograms: dose,
+            doseMicrograms: accumulatedDoseMicrograms,
             segmentConcentrations: concentrations,
             unattributedDurationSeconds: snapshot.unattributedDuration,
             interpolatedSegmentFlags: snapshot.interpolatedSegmentFlags,
