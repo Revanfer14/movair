@@ -69,6 +69,7 @@ final class MapNavigationViewModel: ObservableObject {
     @Published var destinationTitle: String = "Destination"
     @Published var startedAt: Date = Date()
     @Published var isPreparingDose = false
+    @Published var hasArrivedAtDestination: Bool = false
     @Published private(set) var latestHeartRateBPM: Double?
     @Published private(set) var routeHeadingDegrees: Double?
 
@@ -130,9 +131,21 @@ final class MapNavigationViewModel: ObservableObject {
         latestTrackingSnapshot = nil
         pendingDoseSnapshot = nil
         latestHeartRateBPM = nil
+        hasArrivedAtDestination = false
         isUpdatingDose = false
 
-        if route.coordinates.count >= 2 {
+        if let first = route.coordinates.first, let userCoord = self.originCoordinate {
+            let userLoc = CLLocation(latitude: userCoord.latitude, longitude: userCoord.longitude)
+            let startLoc = CLLocation(latitude: first.latitude, longitude: first.longitude)
+            let distanceToStart = userLoc.distance(from: startLoc)
+            if distanceToStart > 12 {
+                routeHeadingDegrees = Self.calculateBearing(from: userCoord, to: first)
+            } else if route.coordinates.count >= 2 {
+                routeHeadingDegrees = Self.calculateBearing(from: route.coordinates[0], to: route.coordinates[1])
+            } else {
+                routeHeadingDegrees = nil
+            }
+        } else if route.coordinates.count >= 2 {
             routeHeadingDegrees = Self.calculateBearing(from: route.coordinates[0], to: route.coordinates[1])
         } else {
             routeHeadingDegrees = nil
@@ -187,6 +200,10 @@ final class MapNavigationViewModel: ObservableObject {
         }
         currentInstructionIndex = 0
         selectedUpcomingOffset = 0
+
+        if let initialSnapshot = rideTracker?.snapshot() {
+            scheduleDoseUpdate(for: initialSnapshot)
+        }
     }
 
     func process(location: CLLocation) {
@@ -201,6 +218,9 @@ final class MapNavigationViewModel: ObservableObject {
 
     func updateHeartRate(_ bpm: Double?) {
         latestHeartRateBPM = bpm
+        if let bpm {
+            print("[MapNavigationViewModel] Realtime HR Updated: \(String(format: "%.1f", bpm)) BPM -> Recalculating Live Inhaled Dose")
+        }
         if let latestTrackingSnapshot {
             scheduleDoseUpdate(for: latestTrackingSnapshot)
         }
@@ -299,10 +319,38 @@ final class MapNavigationViewModel: ObservableObject {
             let stepLocation = CLLocation(latitude: target.latitude, longitude: target.longitude)
             instructions[index].distanceRemainingMeters = max(0, location.distance(from: stepLocation))
         }
+
+        checkDestinationArrival(with: location)
+    }
+
+    private func checkDestinationArrival(with location: CLLocation) {
+        guard !hasArrivedAtDestination else { return }
+
+        if let dest = destinationCoordinate {
+            let destLoc = CLLocation(latitude: dest.latitude, longitude: dest.longitude)
+            let distanceToDestination = location.distance(from: destLoc)
+            if distanceToDestination <= 40 {
+                hasArrivedAtDestination = true
+                return
+            }
+        }
+
+        if currentInstructionIndex == instructions.count - 1 && instructions[currentInstructionIndex].distanceRemainingMeters <= 30 {
+            hasArrivedAtDestination = true
+        }
     }
 
     private func updateRouteHeading(with location: CLLocation) {
         guard routeCoordinates.count >= 2 else { return }
+
+        if let firstCoord = routeCoordinates.first, currentInstructionIndex == 0 {
+            let firstLoc = CLLocation(latitude: firstCoord.latitude, longitude: firstCoord.longitude)
+            let distanceToStart = location.distance(from: firstLoc)
+            if distanceToStart > 12 {
+                routeHeadingDegrees = Self.calculateBearing(from: location.coordinate, to: firstCoord)
+                return
+            }
+        }
 
         var closestIndex = 0
         var minDistance: CLLocationDistance = .greatestFiniteMagnitude

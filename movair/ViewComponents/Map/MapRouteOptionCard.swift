@@ -43,19 +43,10 @@ struct MapRouteOptionCard: View {
             distanceBlock
 
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(route.title)
-                        .font(Font.Brand.bodyBold)
-                        .foregroundStyle(Color.primary)
-                        .lineLimit(1)
-
-                    if route.isLonger {
-                        Text("· More Distance")
-                            .font(Font.Brand.footnote)
-                            .foregroundStyle(Color.Brand.darkgray)
-                            .lineLimit(1)
-                    }
-                }
+                Text(route.title)
+                    .font(Font.Brand.bodyBold)
+                    .foregroundStyle(Color.primary)
+                    .lineLimit(1)
 
                 Text(route.pollutionDeltaLabel)
                     .font(Font.Brand.footnote)
@@ -202,6 +193,19 @@ struct MapRouteOptionCard: View {
                     exposureLevel: .high,
                     pollutionDeltaPercent: 20,
                     isLonger: true,
+                    coordinates: []
+                ),
+                isSelected: false
+            )
+            MapRouteOptionCard(
+                route: RouteOption(
+                    title: "Shorter Route",
+                    distanceKm: 38,
+                    durationMinutes: 160,
+                    exposureRangeUg: 180...200,
+                    exposureLevel: .high,
+                    pollutionDeltaPercent: 15,
+                    isLonger: false,
                     coordinates: []
                 ),
                 isSelected: false

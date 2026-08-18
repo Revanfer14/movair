@@ -64,6 +64,24 @@ struct ActiveNavigationView: View {
             }
         }
         .toolbar(.hidden, for: .tabBar)
+        .sheet(isPresented: $viewModel.hasArrivedAtDestination) {
+            MapDestinationArrivalSheet(
+                destinationTitle: viewModel.destinationTitle,
+                distanceKm: viewModel.distanceKm,
+                durationMinutes: viewModel.durationMinutes,
+                averageSpeedKmh: viewModel.averageSpeedKmh,
+                accumulatedExposureUg: viewModel.accumulatedExposureUg,
+                exposureLevel: viewModel.exposureLevel,
+                onConfirm: {
+                    viewModel.hasArrivedAtDestination = false
+                    onFinish()
+                }
+            )
+            .presentationDetents([.height(320)])
+            .presentationDragIndicator(.visible)
+            .presentationCornerRadius(24)
+            .presentationBackgroundInteraction(.disabled)
+        }
     }
 
     private var mapControls: some View {

@@ -174,20 +174,34 @@ final class RouteSelectionViewModel: ObservableObject {
         }
         let shortestDistance = ranked.map(\.distanceMeters).min() ?? 0
         let lowestDose = fetchedRoutes.compactMap { estimatesByRouteID[$0.id]?.doseMicrograms }.min() ?? 0
+        let cleanerDistance = ranked.first?.distanceMeters ?? 0
 
         routes = ranked.enumerated().map { index, route in
             let dose = estimatesByRouteID[route.id]?.doseMicrograms ?? 0
+            let isRecommended = index == 0
+
+            let title: String = {
+                if isRecommended {
+                    return "Cleaner Route"
+                } else if route.distanceMeters > cleanerDistance {
+                    return "Longer Route"
+                } else if route.distanceMeters < cleanerDistance {
+                    return "Shorter Route"
+                } else {
+                    return "Alternative Route"
+                }
+            }()
 
             return RouteOption(
                 id: route.id,
-                title: "Route \(index + 1)",
+                title: title,
                 distanceKm: route.distanceMeters / 1000,
                 durationMinutes: Int((route.durationSeconds / 60).rounded()),
                 exposureRangeUg: exposureRange(for: dose),
                 exposureLevel: ExposureLevel.from(exposureUg: Int(dose.rounded())),
                 pollutionDeltaPercent: pollutionDeltaPercent(dose: dose, comparedTo: lowestDose),
                 hasEquivalentExposure: hasEquivalentExposure,
-                isRecommended: index == 0,
+                isRecommended: isRecommended,
                 isLonger: route.distanceMeters > shortestDistance,
                 coordinates: route.coordinates,
                 steps: route.steps

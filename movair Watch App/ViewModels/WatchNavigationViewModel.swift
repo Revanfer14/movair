@@ -25,7 +25,6 @@ final class WatchNavigationViewModel: ObservableObject {
         bindHeartRate()
     }
 
-    // Connectivity binding
     private func bindConnectivity() {
         connectivity.$latestPayload
             .receive(on: RunLoop.main)
@@ -56,17 +55,16 @@ final class WatchNavigationViewModel: ObservableObject {
         case .completed: newState = .completed
         }
 
-        // Update metrics from iPhone
-        distanceKm = payload.distanceKm
-        accumulatedExposureUg = payload.exposureUg
-
-        // Sync elapsed only when it makes sense (don't jump backwards aggressively)
-        if payload.elapsedMinutes >= elapsedMinutes {
-            elapsedMinutes = payload.elapsedMinutes
-            accumulatedSeconds = payload.elapsedMinutes * 60
+        if newState == .idle {
+            resetToIdle()
+            return
         }
 
-        // Handle state transition + timer
+        distanceKm = payload.distanceKm
+        accumulatedExposureUg = payload.exposureUg
+        elapsedMinutes = payload.elapsedMinutes
+        accumulatedSeconds = payload.elapsedMinutes * 60
+
         if newState != state {
             state = newState
             switch newState {
@@ -76,17 +74,17 @@ final class WatchNavigationViewModel: ObservableObject {
             case .paused:
                 stopTimer()
                 heartRateManager.pause()
-            case .completed, .idle:
+            case .completed:
                 stopTimer()
                 heartRateManager.stop()
+            case .idle:
+                resetToIdle()
             }
-        } else if newState == .active {
-            // Ensure timer is running if we stay active
-            if timer == nil { startTimer() }
+        } else if newState == .active && timer == nil {
+            startTimer()
         }
     }
 
-    // User actions (sent to iPhone)
     func pause() {
         guard state == .active else { return }
 
@@ -98,7 +96,7 @@ final class WatchNavigationViewModel: ObservableObject {
 
     func resume() {
         guard state == .paused else { return }
-        
+
         state = .active
         startTimer()
         heartRateManager.resume()
@@ -113,7 +111,6 @@ final class WatchNavigationViewModel: ObservableObject {
     }
 
     func dismissToHome() {
-        // no-op on VM; ContentView handles the visual dismiss
     }
 
     func resetToIdle() {
@@ -126,7 +123,6 @@ final class WatchNavigationViewModel: ObservableObject {
         heartRateManager.stop()
     }
 
-    // Timer
     private func startTimer() {
         stopTimer()
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in

@@ -16,7 +16,7 @@ final class LocationManager: NSObject, ObservableObject {
         manager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
         manager.distanceFilter = 10
         manager.activityType = .fitness
-        manager.headingFilter = 3
+        manager.headingFilter = 4
         authorizationStatus = manager.authorizationStatus
     }
 
@@ -47,6 +47,7 @@ final class LocationManager: NSObject, ObservableObject {
         manager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
         manager.distanceFilter = kCLDistanceFilterNone
         manager.activityType = .fitness
+        manager.headingFilter = 4
         manager.pausesLocationUpdatesAutomatically = false
         manager.allowsBackgroundLocationUpdates = true
         if CLLocationManager.headingAvailable() {

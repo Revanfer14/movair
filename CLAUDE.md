@@ -260,17 +260,19 @@ Ini sumber `tᵢ` di live mode. **Event-based segment timer**, bukan rekonstruks
 
 **Off-route (deviasi rute):**
 
-- Jarak tegak lurus ke polyline > 50m selama > 15 detik → status `offRoute`.
-- **v1: terima gapnya.** Waktu selama off-route diakumulasi ke bucket `unattributedDuration`, gak dibebankan ke segmen manapun.
-- Tampilkan di ringkasan: "X menit di luar rute — gak dihitung dalam dosis". Jangan diam-diam dihilangkan, jangan juga dikarang.
-- Balik ke dalam 50m → lanjut dari segmen hasil proyeksi saat itu.
+- Jarak tegak lurus ke polyline > 50m dari rute → status `offRoute`.
+- **v2 (revisi dari v1).** Waktu off-route **tetap dihitung ke dosis**, dibebankan ke `activeSegmentIndex` (segmen valid terakhir sebelum keluar rute) via `attributeToActiveSegment`. `unattributedDuration` di `RideTracker` sekarang selalu 0 — field-nya masih ada di `RideTrackingSnapshot`/`RideRecord`/`TripSummary` buat kompatibilitas struct, tapi gak pernah keisi lagi.
+  - Alasan revisi: v1 (exclude + tampilkan gap) dianggap kurang mencerminkan bahwa user tetap bernapas selama off-route. Trade-off yang disadari: `Cᵢ` yang dipakai buat off-route time adalah `Cᵢ` segmen terakhir yang valid, bukan konsentrasi aktual di lokasi off-route — makin lama/makin jauh nyimpang, makin gak akurat.
+  - Live stats (`MapNavigationStats`) cuma nampilin status `"Off route"` tanpa disclosure durasi/exclusion lagi. `TripSummaryView`'s `unattributedDurationLabel` masih ada di kode tapi guard `> 0`-nya bikin dia gak pernah muncul lagi secara praktis — bukan dihapus eksplisit, cuma jadi dead path. Kalau nanti mau bersih-bersih, hapus field ini di seluruh rantai (`RideTracker` → `RideTrackingSnapshot` → `RideRecord`/`TripSummary` → `TripSummaryView`) sekalian, jangan dibiarkan setengah-setengah.
+  - `DoseConstants.offRouteGraceSeconds` sekarang unused (grace-period logic sebelum flip ke `isOffRoute` udah dihapus) — dead constant, belum dibersihin.
+- Balik ke dalam 50m → lanjut dari segmen hasil proyeksi saat itu (perilaku ini gak berubah).
 
 **Pergantian jam WIB:**
 
 - Ride sepeda gampang lewat batas jam. `hour_of_day` adalah fitur ML terkuat kedua (20% importance) dan pola bias CAMS berubah tajam sore–malam.
 - Waktu jam WIB berganti selama ride: re-fetch Open-Meteo untuk **grup aktif** dan re-prediksi `C_base`. Segmen yang udah selesai **tetap** pakai `C_base` yang berlaku waktu itu — jangan di-retro-fit.
 
-**Output:** `RideRecord` di `Models/` — durasi per segmen, `C_base` yang dipakai, `unattributedDuration`, flag interpolasi, total dosis aktual.
+**Output:** `RideRecord` di `Models/` — durasi per segmen, `C_base` yang dipakai, `unattributedDuration` (selalu 0 sejak v2, lihat di atas), flag interpolasi, total dosis aktual.
 
 ### 4.7 `DoseCalculator` & `DoseConstants`
 

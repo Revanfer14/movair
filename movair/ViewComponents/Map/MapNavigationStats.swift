@@ -66,13 +66,9 @@ struct MapNavigationStats: View {
                 }
 
                 if isOffRoute {
-                    Text("Off route — time not counted in dose")
+                    Text("Off route")
                         .font(Font.Brand.footnote)
                         .foregroundStyle(Color.Brand.primaryOrange)
-                } else if unattributedDurationMinutes > 0 {
-                    Text("\(unattributedDurationMinutes) min off route excluded")
-                        .font(Font.Brand.footnote)
-                        .foregroundStyle(Color.Brand.darkgray)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

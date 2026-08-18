@@ -53,18 +53,25 @@ struct RouteSelectionView: View {
                         bottom: panelHeight + 56,
                         right: 36
                     ),
-                    showsOriginMarker: true
+                    showsOriginMarker: true,
+                    routeOptions: viewModel.routes,
+                    selectedRouteID: viewModel.selectedRouteID,
+                    onSelectRouteID: { id in
+                        if let route = viewModel.routes.first(where: { $0.id == id }) {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                viewModel.selectRoute(route)
+                            }
+                        }
+                    }
                 )
                 .ignoresSafeArea()
 
-                // Endpoint bar
                 VStack(spacing: 0) {
                     topBar
                         .padding(.top, 8)
                     Spacer(minLength: 0)
                 }
 
-                // Recenter + Round Trip above panel
                 VStack(spacing: 10) {
                     HStack(alignment: .bottom) {
                         Button {
@@ -121,7 +128,6 @@ struct RouteSelectionView: View {
         .toolbar(.hidden, for: .tabBar)
     }
 
-    // Top bar
     private var topBar: some View {
         HStack(alignment: .top, spacing: 8) {
             Button {
@@ -156,7 +162,6 @@ struct RouteSelectionView: View {
         .padding(.horizontal, 16)
     }
 
-    // Glass route panel
     private var routePanel: some View {
         VStack(spacing: 0) {
             Capsule()
@@ -174,27 +179,36 @@ struct RouteSelectionView: View {
                         routeErrorState(message: routeError)
                             .padding(.horizontal, 16)
                     } else {
-                        ScrollView(.vertical, showsIndicators: false) {
-                            LazyVStack(spacing: 12) {
-                                ForEach(viewModel.routes) { route in
-                                    MapRouteOptionCard(
-                                        route: route,
-                                        isSelected: route.id == viewModel.selectedRouteID
-                                    )
-                                    .onTapGesture {
-                                        withAnimation(.easeInOut(duration: 0.2)) {
-                                            viewModel.selectRoute(route)
+                        ScrollViewReader { proxy in
+                            ScrollView(.vertical, showsIndicators: false) {
+                                LazyVStack(spacing: 12) {
+                                    ForEach(viewModel.routes) { route in
+                                        MapRouteOptionCard(
+                                            route: route,
+                                            isSelected: route.id == viewModel.selectedRouteID
+                                        )
+                                        .id(route.id)
+                                        .onTapGesture {
+                                            withAnimation(.easeInOut(duration: 0.2)) {
+                                                viewModel.selectRoute(route)
+                                            }
                                         }
                                     }
                                 }
+                                .padding(.horizontal, 16)
+                                .padding(.bottom, 108)
                             }
-                            .padding(.horizontal, 16)
-                            .padding(.bottom, 108)
+                            .onChange(of: viewModel.selectedRouteID) { _, newID in
+                                if let newID {
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        proxy.scrollTo(newID, anchor: .center)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
 
-                // Footer
                 VStack(spacing: 0) {
                     Rectangle()
                         .fill(.ultraThinMaterial)
@@ -248,7 +262,6 @@ struct RouteSelectionView: View {
         .ignoresSafeArea(edges: .bottom)
     }
 
-    // Endpoint search
     private func openEndpointSearch(_ target: EndpointEditTarget) {
         endpointSearchViewModel.searchText = ""
         endpointSearchViewModel.clearSelection()
