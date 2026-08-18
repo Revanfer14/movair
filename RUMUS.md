@@ -8,9 +8,29 @@
 
 ## §1. Rumus Final
 
+**Planning mode** — `VE` satu nilai konstan buat seluruh rute (belum ada HR live sebelum berangkat), jadi boleh ditarik keluar Σ:
+
 ```
 Dosis_rute = VE × Σᵢ (Cᵢ × tᵢ)
 ```
+
+**Live mode** — `VE` bisa berubah tiap update HR (§2.1.1), jadi **wajib** di dalam Σ:
+
+```
+Dosis_rute = Σᵢ (VEᵢ × Cᵢ × tᵢ)
+```
+
+`VEᵢ` = laju ventilasi yang beneran berlaku pas porsi waktu `tᵢ` itu dijalani — **bukan** VE saat ini dikalikan ke seluruh riwayat paparan sejak awal ride. Kalau `VE` konstan (fallback 0.040), dua bentuk di atas identik secara aljabar — VE bisa ditarik keluar Σ tanpa mengubah hasil. Begitu `VE` berbasis HR dan HR berubah-ubah sepanjang ride, dua bentuk itu **tidak lagi ekuivalen**; cuma bentuk kedua (VE di dalam Σ) yang benar secara fisik.
+
+**Implementasi live mode:** `tᵢ` di `RideTracker` itu kumulatif sejak awal ride (gak pernah reset), jadi rumus di atas gak boleh dihitung ulang dari nol tiap update lokasi — itu sama saja narik VE saat ini keluar Σ lagi lewat pintu belakang. Yang diakumulasi adalah dosis **inkremental** per update:
+
+```
+Δtᵢ     = tᵢ_sekarang − tᵢ_update-sebelumnya     (per segmen, ≥ 0)
+Δdosis  = VE(HR_saat_ini) × Σᵢ (Cᵢ × Δtᵢ)
+dosis_total += Δdosis
+```
+
+Cuma porsi waktu yang baru (`Δtᵢ`) yang dinilai pakai HR saat ini; porsi waktu yang udah lewat tetap "terkunci" ke `VE` yang berlaku waktu itu, karena udah ditambahkan ke `dosis_total` di update-update sebelumnya dan gak dihitung ulang. Lihat §5.2 dan `LiveRideDoseSession.swift`.
 
 Breakdown tiap komponen:
 
@@ -18,14 +38,14 @@ Breakdown tiap komponen:
 Cᵢ         = C_base(cellᵢ) × M_road,ᵢ × M_green,ᵢ
 
 tᵢ         = planning : ETA_total_ORS × (distanceᵢ / Σ distance)
-             live     : durasi terukur GPS per segmen  (§5.2)
+             live     : durasi terukur GPS per segmen (kumulatif) — dipecah jadi Δtᵢ per update, lihat di atas
 ```
 
 `i = 1...n` — segmen hasil potong polyline ORS tiap ~200m (lihat §6).
 
 **Tidak ada `F_moda` di rumus ini.** Faktor moda sengaja tidak dipakai — alasannya di §2.2. Jangan dimasukin balik tanpa baca bagian itu dulu.
 
-**Ranking pakai `Σ(Cᵢ × tᵢ)`, bukan `Dosis_rute`.** `VE` konstan di semua kandidat → cancel total pas dibandingin. `VE` cuma dipakai buat nampilin angka dosis absolut ke user.
+**Ranking pakai `Σ(Cᵢ × tᵢ)`, bukan `Dosis_rute`.** Ranking kejadian di planning mode (sebelum berangkat), tempat `VE` masih konstan di semua kandidat rute → cancel total pas dibandingin. `VE` cuma dipakai buat nampilin angka dosis absolut ke user, gak pernah buat nentuin rute mana yang direkomendasikan.
 
 **Aturan ranking:**
 
@@ -43,9 +63,62 @@ tᵢ         = planning : ETA_total_ORS × (distanceᵢ / Σ distance)
 | ---- | ----------------------------- | --------------------------- | ------------------------------ |
 | `VE` | Laju ventilasi saat bersepeda | **0.040 m³/min (40 L/min)** | Fallback yang dipakai sekarang |
 
-- Nilai ini dipakai **sekarang dan seterusnya sebagai fallback** kalau data heart rate gak tersedia.
-- Idealnya `VE` dihitung per-individu dari heart rate (HealthKit). Rumusnya **belum ditetapkan** — jangan dikarang, jangan diimplementasi setengah-setengah. Sampai rumusnya ada, konstanta ini yang berlaku.
-- Desain kode: protokol `VentilationRateProvider`, implementasi `ConstantVentilationRate` mengembalikan 0.040. Versi berbasis HR nyusul sebagai implementasi kedua tanpa nyentuh `DoseCalculator`.
+- Nilai ini dipakai **sekarang dan seterusnya sebagai fallback** kalau data heart rate gak tersedia (HealthKit gak diotorisasi, Apple Watch gak kepasang, HR ≤ 30 bpm, atau salah satu input formula §2.1.1 gak lengkap).
+- Idealnya `VE` dihitung per-individu dari heart rate (HealthKit). Rumusnya **udah dipilih dan udah diimplementasi** — lihat §2.1.1 — di `HealthKitVentilationRateProvider` + `MinuteVentilationEstimator`.
+- Desain kode: protokol `VentilationRateProvider`, implementasi `ConstantVentilationRate` mengembalikan 0.040, dan `HealthKitVentilationRateProvider` (§2.1.1) sebagai implementasi kedua yang jatuh balik ke `ConstantVentilationRate` kalau input gak lengkap. `DoseCalculator` sendiri gak berubah — yang berubah adalah **cara live mode manggil dia**: per-increment waktu, bukan per-total-riwayat (lihat §1).
+
+### 2.1.1 Formula HR-based — Greenwald et al. 2019 (dipilih, sudah diimplementasi)
+
+```
+V̇E = exp(-9.59) × HR^2.39 × age^0.274 × sex^-0.204 × FVC^0.520
+```
+
+| Var | Asal | Catatan |
+| --- | --- | --- |
+| `HR` | HealthKit, live, dari `HKWorkoutSession` + `HKLiveWorkoutBuilder` | bpm, real-time selama ride |
+| `age` | HealthKit `dateOfBirth` | tahun |
+| `sex` | HealthKit `biologicalSex` | **1 = pria, 2 = wanita** (encoding asli paper, bukan pilihan kita). `.other`/`.notSet`/gak diotorisasi → **default ke 1 (pria)** — keputusan produk, dicatat di sini, bukan di kode |
+| `FVC` | **Diestimasi**, bukan diukur | lihat di bawah |
+
+**Sumber:** Greenwald R, Hayat MJ, Dons E, Giles L, Villar R, Jakovljevic DG, Good N. 2019. "Estimating minute ventilation and air pollution inhaled dose using heart rate, breath frequency, age, sex and forced vital capacity: A pooled-data analysis." *PLoS ONE* 14(7): e0218673. DOI: [10.1371/journal.pone.0218673](https://doi.org/10.1371/journal.pone.0218673). Dipilih dari 2 kandidat yang dievaluasi — menang karena:
+
+- Pooled data 471 subjek, umur 4–80, sex seimbang, 5 negara, 3 benua — jauh lebih luas dari kandidat lain (Oneda dkk., *Physiological Reports* 2026, "A Bayesian approach to estimate minute ventilation from heart rate during exercise for assessing environmental exposures of females", DOI: [10.14814/phy2.70767](https://physoc.onlinelibrary.wiley.com/doi/10.14814/phy2.70767) — cuma 19 subjek wanita, treadmill running doang).
+- Aktivitas yang di-cover termasuk **cycling**, bukan cuma running.
+- **Gak butuh kalibrasi lab** (VT1/VT2 dari CPET) kayak model berbasis domain intensitas — kandidat lain gak kepake justru karena itu: gak mungkin device konsumer nentuin domain intensitas tanpa tes lab.
+
+**Akurasi — dicatat apa adanya:** median cross-validated percent error 0.664% (nyaris gak bias secara rata-rata), tapi **IQR 45.4 persentase poin** — prediksi per-menit individual bisa meleset jauh meskipun rata-ratanya gak bias. Ini error tambahan di atas error dosis yang udah ada (§9: cuma 43% perjalanan akurat ±20%) — belum dievaluasi gimana keduanya bertumpuk. Jangan klaim akurasi VE yang lebih baik dari ini.
+
+**`FVC` gak bisa diambil langsung dari Apple Watch.** HealthKit punya tipe `HKQuantityTypeIdentifier.forcedVitalCapacity`, tapi Apple Watch gak pernah nulis ke situ — cuma keisi kalau user pernah pakai app/device spirometer terpisah (jarang). Dua opsi:
+
+1. **FVC terukur** (kalau kebetulan ada di HealthKit) — dipakai apa adanya kalau tersedia.
+2. **FVC diestimasi** dari `height` + `age` + `sex` (semua ada di HealthKit) + etnis, pakai persamaan referensi. **Belum di-pin — task terpisah, lihat §2.1.2.**
+
+### 2.1.2 Sumber estimasi FVC — DIPILIH: South Asian reference equations (Leong et al. 2022)
+
+```
+FVC (L) = intercept − 0.0224×age + 0.0458×height_cm     (pria)
+FVC (L) = intercept − 0.0200×age + 0.0305×height_cm     (wanita)
+
+Pria   : intercept = −3.349
+Wanita : intercept = −1.533
+```
+
+`age` dalam tahun, `height` dalam **cm** (beda dari formula V̇E di §2.1.1 yang makein meter — jangan ketuker unit pas implementasi).
+
+**Sumber:** Leong WY, Gupta A, Hasan M, dkk. 2022. "Reference equations for evaluation of spirometry function tests in South Asia, and among South Asians living in other countries." *European Respiratory Journal* 60(6): 2102962. DOI: [10.1183/13993003.02962-2021](https://doi.org/10.1183/13993003.02962-2021). Open access, koefisien di Tabel 2 (Model M1: umur + tinggi doang, gak pakai berat/region — didesain penulisnya biar "konsisten dipakai kayak GLI 2012 dan NHANES III").
+
+**Kenapa ini yang dipilih** — 4 kandidat dievaluasi total, urutan kronologis:
+
+1. **Hankinson NHANES III (1999)** — Hankinson JL, Odencrantz JR, Fedan KB. "Spirometric reference values from a sample of the general U.S. population." *Am J Respir Crit Care Med* 159(1): 179–187. Closed-form (polinomial `intercept + a·age + b·age² + c·height²`), tapi **ditolak**: cuma 3 kategori ras (Caucasian, African American, Mexican American) — gak ada kategori Asia sama sekali.
+2. **GLI-2012** — Quanjer PH, Stanojevic S, Cole TJ, dkk. 2012. "Multi-ethnic reference values for spirometry for the 3–95-yr age range: the global lung function 2012 equations." *Eur Respir J* 40(6): 1324–1343. Punya kategori "North East Asian"/"South East Asian", tapi **ditolak**: bukan closed-form (spline LMS/GAMLSS, butuh tabel lookup umur-per-umur), dan tetep harus milih kategori etnis per user.
+3. **GLI Global 2022** — Bowerman C, dkk. 2023. "A Race-neutral Approach to the Interpretation of Lung Function Measurements." *Am J Respir Crit Care Med*. Race-neutral (gak perlu nanya etnis user), didukung rekomendasi ATS/ERS April 2023. **Ditolak buat sekarang**, dua alasan: (a) tetep spline-based, butuh tabel `Mspline`/`Sspline` resmi dari GLI yang gak bisa diambil langsung (ersnet.org nolak automated fetch, dan tools resminya **"by law" dibatasi buat riset/edukasi/validasi software, bukan buat dipakai di produk**, belum jelas cakupannya buat use-case CleanRoute); (b) package open-source `rspiro` yang implementasi formulanya berlisensi **GPL (≥2)** — copy kode/tabelnya langsung ke codebase komersial CleanRoute berisiko ketarik kewajiban copyleft GPL.
+4. **South Asian (Leong et al. 2022)** — **dipilih.** Closed-form (linear doang, `intercept + a·age + b·height`), gak ada isu lisensi (paper open access biasa, bukan software berlisensi khusus), tervalidasi di 5.589 subjek net-never-smoker dari Bangladesh/India Utara/India Selatan/Pakistan/Sri Lanka + validasi eksternal 339 orang South Asian di Singapura (studi HELIOS), umur 18–85.
+
+**Catatan jujur soal fit populasi:** South Asian **bukan** Asia Tenggara/Indonesia. Ini bukan formula yang divalidasi buat orang Jakarta — tapi dari semua kandidat yang dicek, ini yang paling deket secara geografis/genetik (apalagi ada lengan validasi Singapura) dari opsi yang beneran bisa diimplementasi tanpa tabel spline atau lisensi bermasalah. Kalau nanti ada waktu buat ngurus akses GLI Global 2022 resmi (klarifikasi syarat pemakaian ke ERS/GLI network), itu tetep upgrade yang lebih bener secara metodologis — lihat langkah 3 di atas.
+
+**Status implementasi:** formula V̇E (§2.1.1) dan estimasi FVC (§2.1.2) **udah diimplementasi** di `HealthKitVentilationRateProvider` + `MinuteVentilationEstimator`. Urutan yang dipakai: (1) HealthKit authorization + baca `height`/`dateOfBirth`/`biologicalSex` sekali di `prepare()` awal ride, (2) HR live dari Apple Watch (`HKWorkoutSession` + `HKLiveWorkoutBuilder`) dikirim ke iPhone lewat WatchConnectivity, throttled maks 1× per 5 detik, (3) FVC dihitung sekali per ride via §2.1.2 (gak berubah-ubah sepanjang ride), (4) `V̇E` dihitung ulang tiap `apply()` dipanggil, pakai HR saat itu — fallback ke `ConstantVentilationRate` (0.040) kalau HR ≤ 30 bpm atau profil HealthKit gagal dimuat.
+
+**Bug yang sempat kejadian dan udah diperbaiki:** implementasi awal ngambil `exposure` kumulatif (`Σ(Cᵢ × tᵢ)` sejak awal ride, terus terus bertambah) dan langsung dikaliin `VE` dari HR **saat query dipanggil**. Efeknya, HR sesaat sebelum query ikut nge-*rescale* seluruh riwayat paparan dari awal ride — bukan cuma porsi waktu yang beneran dijalani di HR segitu. Ini persis kesalahan "VE ditarik keluar Σ padahal VE gak konstan" yang dibahas di §1. Diperbaiki jadi akumulasi inkremental: `LiveRideDoseSession` sekarang nyimpen durasi-per-segmen dari update sebelumnya, ngitung `Δtᵢ` tiap panggilan `apply()`, dan nambahin `VE(HR_saat_ini) × Σ(Cᵢ × Δtᵢ)` ke total dosis yang jalan terus (`accumulatedDoseMicrograms`) — bukan nghitung ulang dari nol tiap update. Lihat rumus Δdosis di §1.
 
 **Nilai lama `0.014 m³/min` udah gak berlaku.** Itu angka aktivitas ringan / duduk di kendaraan (Mainka et al. 2025, diturunkan dari U.S. EPA Exposure Factors Handbook 2011), cocok buat pengendara motor yang duduk diam. Bersepeda = aktivitas moderat–berat, ventilasinya jauh lebih tinggi.
 
@@ -237,12 +310,16 @@ Perilaku: user masuk segmen-1 → timer segmen-1 mulai dari 0. User keluar zona 
 
 **Off-route:**
 
-- Jarak tegak lurus ke polyline > 50m selama > 15 detik → status `offRoute`.
-- **v1: terima gapnya.** Waktu off-route masuk bucket `unattributedDuration`, gak dibebankan ke segmen manapun.
-- Tampilkan di ringkasan: "X menit di luar rute — gak dihitung dalam dosis". Jangan diam-diam dihilangkan, jangan juga dikarang.
-- Balik ke dalam 50m → lanjut dari segmen hasil proyeksi saat itu.
+> **Revisi.** Ini keputusan produk terbaru, menggantikan dua versi sebelumnya: draf awal dokumen ini ("v1" — exclude ke `unattributedDuration`), dan implementasi interim yang sempat jalan di kode ("v2" — freeze ke `activeSegmentIndex` terakhir via `attributeToActiveSegment`). Dua-duanya udah gak berlaku.
 
-**Kontrak:** di live mode `Σ tᵢ` = durasi aktual terukur, dan **tidak dipaksa** sama dengan `ETA_total_ORS`. Beda antara keduanya itu informasi, bukan error.
+- Jarak tegak lurus ke polyline > 50m selama > 15 detik → status `offRoute`. **Ini murni flag informasional buat UI** (nampilin "lagi di luar rute" ke user) — status ini **tidak mengubah cara `tᵢ` dihitung sama sekali**.
+- Map-matching & timer segmen (aturan di atas: proyeksi ke polyline, index segmen dari jarak kumulatif, anti-flapping ≥20m lewat batas) **jalan identik**, off-route atau enggak. Gak ada cabang kode terpisah buat kondisi ini.
+- Selama proyeksi posisi masih nunjuk ke segmen aktif yang sama (belum ada transisi valid) → waktu terus keakumulasi ke segmen itu. User off-route tapi belum "masuk" segmen berikutnya = dianggap masih di segmen yang sama, persis kayak kalau dia di jalur.
+- Begitu proyeksi lewat ambang transisi ke segmen berikutnya → segmen aktif pindah seperti biasa, walau posisi fisik user masih > 50m dari polyline. Gak ada syarat "harus balik ke jalur dulu" buat transisi kejadian.
+- Gak ada bucket `unattributedDuration` lagi — semua waktu, off-route atau enggak, selalu dibebankan ke suatu segmen lewat proyeksi normal. Gak perlu ditampilkan sebagai "X menit gak dihitung" karena memang gak ada waktu yang dibuang.
+- **Trade-off yang disadari:** `Cᵢ` yang dipakai buat waktu off-route adalah `Cᵢ` segmen yang lagi aktif menurut proyeksi terakhir, bukan konsentrasi aktual di lokasi fisik user. Makin jauh/makin lama nyimpang dari rute, makin gak representatif nilai itu. Ini trade-off yang sama kayak versi "v2" sebelumnya — cuma sekarang gak ada logic freeze terpisah, jadi konsekuensinya lebih konsisten diprediksi.
+
+**Kontrak:** di live mode `Σ tᵢ` = durasi aktual terukur, dan **tidak dipaksa** sama dengan `ETA_total_ORS`. Beda antara keduanya itu informasi, bukan error. Off-route **tidak** mengurangi `Σ tᵢ` — lihat kontrak #10 di §8.
 
 ---
 
@@ -292,12 +369,17 @@ Kesalahan di poin 1–4 bikin app **diam-diam salah tanpa error** — gak crash,
 6. Konstanta rumus HARUS sama persis:
      M_road  : arteri 1.25 · kolektor 1.15 · lokal 1.00
      M_green : 1 − 0.05 × greenery_index
-     VE      : 0.040 m³/min
+     VE      : 0.040 m³/min (fallback) — atau HR-based §2.1.1 kalau HR > 30 bpm & profil ada
      F_moda  : TIDAK DIPAKAI (§2.2) — jangan dimasukin balik
-     Dosis   : 0.040 × Σ(PM2.5 × M_road × M_green × menit)
+     Dosis   : planning → VE × Σ(Cᵢ × tᵢ)                    ← VE konstan, boleh di luar Σ
+               live     → Σ(VEᵢ × Cᵢ × tᵢ)                    ← VE WAJIB di dalam Σ, lihat §1
 7. Σtᵢ = ETA_total_ORS            ← HANYA di planning mode
    Σtᵢ = durasi terukur           ← di live mode, sengaja beda dari ETA
 8. Fetch CAMS pakai clustering jarak (§3.1)  ← BUKAN floor(lat/0.4), floor(lon/0.4)
+9. Live mode: dosis diakumulasi INKREMENTAL per update (Δdosis += VE_sekarang × Σ(Cᵢ×Δtᵢ))
+   ← BUKAN VE_sekarang × exposure_seluruh_riwayat dihitung ulang tiap update (§1, §2.1.1)
+10. Off-route BUKAN kondisi khusus buat map-matching/timer (§5.2)
+    ← jangan exclude ke unattributedDuration, jangan freeze ke "segmen aktif terakhir" — proyeksi & transisi jalan sama kayak on-route
 ```
 
 ---
@@ -312,6 +394,7 @@ Kesalahan di poin 1–4 bikin app **diam-diam salah tanpa error** — gak crash,
 - **Tipe stasiun training belum diverifikasi** (roadside vs background) → risiko double counting di `M_road`, lihat §4.3.
 - **PM2.5 itu polutan yang lemah buat membedakan rute.** Literatur nunjukin diskriminasi antar rute high/low traffic cuma ~1,15×, karena PM2.5 didominasi background regional; penanda yang kuat adalah black carbon dan UFP (2,5× dan 1,9×), dan dua-duanya gak tersedia di CAMS. Ini konsisten dengan temuan internal: arah tebakan cuma **43,75%** benar di pasangan rute kontras ekstrem. Konsekuensinya banyak pasangan rute bakal keluar "paparan setara" — itu gate 20% kerja sesuai desain, bukan bug.
 - **Threshold clustering CAMS (20 km) masih provisional** (§3.1) — belum divalidasi lewat sampling sistematis sepanjang rute. Belum tau apakah perubahan `base_pm25` di lapangan itu gradual (threshold kecil lebih tepat) atau ada lompatan tajam di titik tertentu (threshold perlu disesuaikan ke situ). Jangan klaim threshold ini akurat sebelum divalidasi.
+- **Dosis selama off-route (§5.2) pakai `Cᵢ` segmen aktif menurut proyeksi, bukan konsentrasi aktual di lokasi user.** Makin jauh/lama nyimpang dari rute, makin gak representatif. Ini trade-off yang disadari, bukan bug — alternatifnya (exclude waktu, atau freeze ke segmen lama) dianggap lebih buruk karena user tetap bernapas selama off-route.
 - Boleh klaim: _"rute dengan komposisi jalan dan waktu tempuh yang paparannya lebih rendah"_. **Tidak boleh** klaim: _"kami menemukan area yang udaranya lebih bersih"_.
 
 ---
@@ -332,6 +415,8 @@ Kesalahan di poin 1–4 bikin app **diam-diam salah tanpa error** — gak crash,
 | 10  | `congestion_ratio` = fungsi `hour × road_class × is_weekend`                | **1.0 seragam**                                              | Monte Carlo: 0/30 ranking flip. Tabel 144-cell sengaja tidak dibangun                                                                                                                                                                                                                                                                                             |
 | 11  | Resolusi CAMS ditulis 11 km di `v4-summary.md`                              | **0.4° ≈ 44 km (nominal)**                                   | 11 km = CAMS Europe. Indonesia pakai CAMS global                                                                                                                                                                                                                                                                                                                  |
 | 12  | Dedup fetch CAMS pakai `floor(lat/0.4), floor(lon/0.4)` (grid quantization) | **Clustering berbasis jarak, threshold 20 km (provisional)** | Empiris: dua titik yang menurut floor-division satu cell yang sama ngasih `base_pm25` beda jauh (52,5 vs 40,2, rute uji `-6.262199,106.668267` → `-6.177820,106.790758`, 120 segmen). Grid quantization gak valid buat granularitas Open-Meteo yang sebenarnya — kemungkinan API-nya interpolasi internal, atau grid asli gak align ke kelipatan 0.4°. Lihat §3.1 |
+| 13  | Live mode: `dosis = VE(HR_sekarang) × exposure_kumulatif_seluruh_riwayat`, dihitung ulang dari nol tiap update lokasi | **Akumulasi inkremental**: `dosis_total += VE(HR_sekarang) × Σ(Cᵢ × Δtᵢ)`, `Δtᵢ` = durasi baru sejak update terakhir | `VE` berbasis HR (§2.1.1) berubah-ubah sepanjang ride begitu diimplementasi. Versi lama nge-*retroactively rescale* seluruh riwayat paparan pakai HR sesaat pas query — porsi waktu dari 2 jam lalu ikut kena HR barusan. Ini contoh nyata kenapa `VE` harus di dalam Σ kalau gak konstan (§1) |
+| 14  | Off-route: waktu di-exclude ke `unattributedDuration` (v1), lalu direvisi jadi freeze ke `activeSegmentIndex` terakhir via `attributeToActiveSegment` (v2, cuma sempat ada di kode/CLAUDE.md) | **Off-route bukan kondisi khusus sama sekali** — map-matching & timer segmen jalan identik on-route/off-route, waktu ngikut proyeksi posisi biasa (§5.2) | User tetap bernapas selama off-route, jadi waktunya harus tetap kehitung (menyingkirkan v1). Tapi freeze ke segmen lama (v2) bikin logic bercabang dan gak perlu — proyeksi normal ke polyline udah otomatis ngasih index segmen yang masuk akal walau posisi jauh dari rute, jadi cabang khusus cuma nambah kompleksitas tanpa manfaat |
 
 Efek gabungan item 2 + 3 ke angka dosis absolut: `0.014 × 1.5 = 0.021` → `0.040`, naik **~1,9×**. Ranking gak berubah sama sekali.
 
