@@ -1,4 +1,6 @@
 import Foundation
+internal import _LocationEssentials
+
 
 final class RemotePMPredictor: PMPredicting, @unchecked Sendable {
     private let api: MovairAPI

@@ -1,6 +1,7 @@
 import CoreLocation
 import Foundation
 
+
 struct LiveDoseSnapshot: Equatable {
     let doseMicrograms: Double
     let segmentConcentrations: [Double]
@@ -21,6 +22,8 @@ actor LiveRideDoseSession {
     private var lockedSegmentIndices: Set<Int> = []
     private var currentWIBHour: Int?
     private let wibTimeZone: TimeZone
+    private var previousSegmentDurationsSeconds: [TimeInterval]
+    private var accumulatedDoseMicrograms: Double = 0
 
     init(
         segments: [RouteSegment],
@@ -50,6 +53,7 @@ actor LiveRideDoseSession {
             try resolvedRoadDataStore.attributes(for: $0.midpoint)
         }
         self.basePM25BySegment = Array(repeating: 0, count: segments.count)
+        self.previousSegmentDurationsSeconds = Array(repeating: 0, count: segments.count)
     }
 
     func prepare(date: Date = Date()) async throws {
@@ -59,34 +63,38 @@ actor LiveRideDoseSession {
     }
 
     func apply(
-        snapshot: RideTrackingSnapshot,
-        date: Date = Date(),
-        heartRateBPM: Double = 0
-    ) async throws -> LiveDoseSnapshot {
-        try await refreshIfHourChanged(
-            date: date,
-            activeSegmentIndex: snapshot.activeSegmentIndex
-        )
+            snapshot: RideTrackingSnapshot,
+            date: Date = Date(),
+            heartRateBPM: Double = 0
+        ) async throws -> LiveDoseSnapshot {
+            try await refreshIfHourChanged(
+                date: date,
+                activeSegmentIndex: snapshot.activeSegmentIndex
+            )
 
-        let concentrations = segmentConcentrations()
-        let durationsMinutes = snapshot.segmentDurations.map { $0 / 60 }
-        let exposure = DoseCalculator.exposure(
-            concentrations: concentrations,
-            durationsMinutes: durationsMinutes
-        )
-        let dose = DoseCalculator.doseMicrograms(
-            exposure: exposure,
-            ventilationRate: ventilationRateProvider.ventilationRate(heartRateBPM: heartRateBPM)
-        )
+            let concentrations = segmentConcentrations()
+            let deltaDurationsMinutes = zip(snapshot.segmentDurations, previousSegmentDurationsSeconds).map {
+                max(0, $0 - $1) / 60
+            }
+            let deltaExposure = DoseCalculator.exposure(
+                concentrations: concentrations,
+                durationsMinutes: deltaDurationsMinutes
+            )
+            let currentVentilationRate = ventilationRateProvider.ventilationRate(heartRateBPM: heartRateBPM)
+            accumulatedDoseMicrograms += DoseCalculator.doseMicrograms(
+                exposure: deltaExposure,
+                ventilationRate: currentVentilationRate
+            )
+            previousSegmentDurationsSeconds = snapshot.segmentDurations
 
-        return LiveDoseSnapshot(
-            doseMicrograms: dose,
-            segmentConcentrations: concentrations,
-            unattributedDurationSeconds: snapshot.unattributedDuration,
-            interpolatedSegmentFlags: snapshot.interpolatedSegmentFlags,
-            isOffRoute: snapshot.isOffRoute
-        )
-    }
+            return LiveDoseSnapshot(
+                doseMicrograms: accumulatedDoseMicrograms,
+                segmentConcentrations: concentrations,
+                unattributedDurationSeconds: snapshot.unattributedDuration,
+                interpolatedSegmentFlags: snapshot.interpolatedSegmentFlags,
+                isOffRoute: snapshot.isOffRoute
+            )
+        }
 
     func makeRideRecord(from snapshot: RideTrackingSnapshot, doseMicrograms: Double) -> RideRecord {
         RideRecord(
