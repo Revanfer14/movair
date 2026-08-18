@@ -8,9 +8,29 @@
 
 ## §1. Rumus Final
 
+**Planning mode** — `VE` satu nilai konstan buat seluruh rute (belum ada HR live sebelum berangkat), jadi boleh ditarik keluar Σ:
+
 ```
 Dosis_rute = VE × Σᵢ (Cᵢ × tᵢ)
 ```
+
+**Live mode** — `VE` bisa berubah tiap update HR (§2.1.1), jadi **wajib** di dalam Σ:
+
+```
+Dosis_rute = Σᵢ (VEᵢ × Cᵢ × tᵢ)
+```
+
+`VEᵢ` = laju ventilasi yang beneran berlaku pas porsi waktu `tᵢ` itu dijalani — **bukan** VE saat ini dikalikan ke seluruh riwayat paparan sejak awal ride. Kalau `VE` konstan (fallback 0.040), dua bentuk di atas identik secara aljabar — VE bisa ditarik keluar Σ tanpa mengubah hasil. Begitu `VE` berbasis HR dan HR berubah-ubah sepanjang ride, dua bentuk itu **tidak lagi ekuivalen**; cuma bentuk kedua (VE di dalam Σ) yang benar secara fisik.
+
+**Implementasi live mode:** `tᵢ` di `RideTracker` itu kumulatif sejak awal ride (gak pernah reset), jadi rumus di atas gak boleh dihitung ulang dari nol tiap update lokasi — itu sama saja narik VE saat ini keluar Σ lagi lewat pintu belakang. Yang diakumulasi adalah dosis **inkremental** per update:
+
+```
+Δtᵢ     = tᵢ_sekarang − tᵢ_update-sebelumnya     (per segmen, ≥ 0)
+Δdosis  = VE(HR_saat_ini) × Σᵢ (Cᵢ × Δtᵢ)
+dosis_total += Δdosis
+```
+
+Cuma porsi waktu yang baru (`Δtᵢ`) yang dinilai pakai HR saat ini; porsi waktu yang udah lewat tetap "terkunci" ke `VE` yang berlaku waktu itu, karena udah ditambahkan ke `dosis_total` di update-update sebelumnya dan gak dihitung ulang. Lihat §5.2 dan `LiveRideDoseSession.swift`.
 
 Breakdown tiap komponen:
 
@@ -18,14 +38,14 @@ Breakdown tiap komponen:
 Cᵢ         = C_base(cellᵢ) × M_road,ᵢ × M_green,ᵢ
 
 tᵢ         = planning : ETA_total_ORS × (distanceᵢ / Σ distance)
-             live     : durasi terukur GPS per segmen  (§5.2)
+             live     : durasi terukur GPS per segmen (kumulatif) — dipecah jadi Δtᵢ per update, lihat di atas
 ```
 
 `i = 1...n` — segmen hasil potong polyline ORS tiap ~200m (lihat §6).
 
 **Tidak ada `F_moda` di rumus ini.** Faktor moda sengaja tidak dipakai — alasannya di §2.2. Jangan dimasukin balik tanpa baca bagian itu dulu.
 
-**Ranking pakai `Σ(Cᵢ × tᵢ)`, bukan `Dosis_rute`.** `VE` konstan di semua kandidat → cancel total pas dibandingin. `VE` cuma dipakai buat nampilin angka dosis absolut ke user.
+**Ranking pakai `Σ(Cᵢ × tᵢ)`, bukan `Dosis_rute`.** Ranking kejadian di planning mode (sebelum berangkat), tempat `VE` masih konstan di semua kandidat rute → cancel total pas dibandingin. `VE` cuma dipakai buat nampilin angka dosis absolut ke user, gak pernah buat nentuin rute mana yang direkomendasikan.
 
 **Aturan ranking:**
 
@@ -43,11 +63,11 @@ tᵢ         = planning : ETA_total_ORS × (distanceᵢ / Σ distance)
 | ---- | ----------------------------- | --------------------------- | ------------------------------ |
 | `VE` | Laju ventilasi saat bersepeda | **0.040 m³/min (40 L/min)** | Fallback yang dipakai sekarang |
 
-- Nilai ini dipakai **sekarang dan seterusnya sebagai fallback** kalau data heart rate gak tersedia (HealthKit gak diotorisasi, Apple Watch gak kepasang, atau salah satu input formula §2.1.1 gak lengkap).
-- Idealnya `VE` dihitung per-individu dari heart rate (HealthKit). Rumusnya **udah dipilih** — lihat §2.1.1 — tapi **belum diimplementasi di kode**. Sampai diimplementasi, konstanta ini yang berlaku.
-- Desain kode: protokol `VentilationRateProvider`, implementasi `ConstantVentilationRate` mengembalikan 0.040. Versi berbasis HR (§2.1.1) nyusul sebagai implementasi kedua tanpa nyentuh `DoseCalculator`.
+- Nilai ini dipakai **sekarang dan seterusnya sebagai fallback** kalau data heart rate gak tersedia (HealthKit gak diotorisasi, Apple Watch gak kepasang, HR ≤ 30 bpm, atau salah satu input formula §2.1.1 gak lengkap).
+- Idealnya `VE` dihitung per-individu dari heart rate (HealthKit). Rumusnya **udah dipilih dan udah diimplementasi** — lihat §2.1.1 — di `HealthKitVentilationRateProvider` + `MinuteVentilationEstimator`.
+- Desain kode: protokol `VentilationRateProvider`, implementasi `ConstantVentilationRate` mengembalikan 0.040, dan `HealthKitVentilationRateProvider` (§2.1.1) sebagai implementasi kedua yang jatuh balik ke `ConstantVentilationRate` kalau input gak lengkap. `DoseCalculator` sendiri gak berubah — yang berubah adalah **cara live mode manggil dia**: per-increment waktu, bukan per-total-riwayat (lihat §1).
 
-### 2.1.1 Formula HR-based — Greenwald et al. 2019 (dipilih, belum diimplementasi)
+### 2.1.1 Formula HR-based — Greenwald et al. 2019 (dipilih, sudah diimplementasi)
 
 ```
 V̇E = exp(-9.59) × HR^2.39 × age^0.274 × sex^-0.204 × FVC^0.520
@@ -96,7 +116,9 @@ Wanita : intercept = −1.533
 
 **Catatan jujur soal fit populasi:** South Asian **bukan** Asia Tenggara/Indonesia. Ini bukan formula yang divalidasi buat orang Jakarta — tapi dari semua kandidat yang dicek, ini yang paling deket secara geografis/genetik (apalagi ada lengan validasi Singapura) dari opsi yang beneran bisa diimplementasi tanpa tabel spline atau lisensi bermasalah. Kalau nanti ada waktu buat ngurus akses GLI Global 2022 resmi (klarifikasi syarat pemakaian ke ERS/GLI network), itu tetep upgrade yang lebih bener secara metodologis — lihat langkah 3 di atas.
 
-**Status implementasi:** formula V̇E (§2.1.1) dan estimasi FVC (§2.1.2) **udah dua-duanya diputuskan**. Belum ada baris kode yang jalanin — `VentilationRateProvider` HR-based masih belum dibikin. Urutan kerja yang masuk akal kalau dibikin: (1) HealthKit authorization + baca `height`/`dateOfBirth`/`biologicalSex` sekali di awal ride, (2) live HR stream dari `HKLiveWorkoutBuilder`, (3) hitung FVC via §2.1.2 (sekali per ride, gak berubah-ubah), (4) hitung `V̇E` per update HR via §2.1.1, ganti `ConstantVentilationRate` kalau semua input di atas tersedia — fallback ke 0.040 kalau enggak.
+**Status implementasi:** formula V̇E (§2.1.1) dan estimasi FVC (§2.1.2) **udah diimplementasi** di `HealthKitVentilationRateProvider` + `MinuteVentilationEstimator`. Urutan yang dipakai: (1) HealthKit authorization + baca `height`/`dateOfBirth`/`biologicalSex` sekali di `prepare()` awal ride, (2) HR live dari Apple Watch (`HKWorkoutSession` + `HKLiveWorkoutBuilder`) dikirim ke iPhone lewat WatchConnectivity, throttled maks 1× per 5 detik, (3) FVC dihitung sekali per ride via §2.1.2 (gak berubah-ubah sepanjang ride), (4) `V̇E` dihitung ulang tiap `apply()` dipanggil, pakai HR saat itu — fallback ke `ConstantVentilationRate` (0.040) kalau HR ≤ 30 bpm atau profil HealthKit gagal dimuat.
+
+**Bug yang sempat kejadian dan udah diperbaiki:** implementasi awal ngambil `exposure` kumulatif (`Σ(Cᵢ × tᵢ)` sejak awal ride, terus terus bertambah) dan langsung dikaliin `VE` dari HR **saat query dipanggil**. Efeknya, HR sesaat sebelum query ikut nge-*rescale* seluruh riwayat paparan dari awal ride — bukan cuma porsi waktu yang beneran dijalani di HR segitu. Ini persis kesalahan "VE ditarik keluar Σ padahal VE gak konstan" yang dibahas di §1. Diperbaiki jadi akumulasi inkremental: `LiveRideDoseSession` sekarang nyimpen durasi-per-segmen dari update sebelumnya, ngitung `Δtᵢ` tiap panggilan `apply()`, dan nambahin `VE(HR_saat_ini) × Σ(Cᵢ × Δtᵢ)` ke total dosis yang jalan terus (`accumulatedDoseMicrograms`) — bukan nghitung ulang dari nol tiap update. Lihat rumus Δdosis di §1.
 
 **Nilai lama `0.014 m³/min` udah gak berlaku.** Itu angka aktivitas ringan / duduk di kendaraan (Mainka et al. 2025, diturunkan dari U.S. EPA Exposure Factors Handbook 2011), cocok buat pengendara motor yang duduk diam. Bersepeda = aktivitas moderat–berat, ventilasinya jauh lebih tinggi.
 
@@ -343,12 +365,15 @@ Kesalahan di poin 1–4 bikin app **diam-diam salah tanpa error** — gak crash,
 6. Konstanta rumus HARUS sama persis:
      M_road  : arteri 1.25 · kolektor 1.15 · lokal 1.00
      M_green : 1 − 0.05 × greenery_index
-     VE      : 0.040 m³/min
+     VE      : 0.040 m³/min (fallback) — atau HR-based §2.1.1 kalau HR > 30 bpm & profil ada
      F_moda  : TIDAK DIPAKAI (§2.2) — jangan dimasukin balik
-     Dosis   : 0.040 × Σ(PM2.5 × M_road × M_green × menit)
+     Dosis   : planning → VE × Σ(Cᵢ × tᵢ)                    ← VE konstan, boleh di luar Σ
+               live     → Σ(VEᵢ × Cᵢ × tᵢ)                    ← VE WAJIB di dalam Σ, lihat §1
 7. Σtᵢ = ETA_total_ORS            ← HANYA di planning mode
    Σtᵢ = durasi terukur           ← di live mode, sengaja beda dari ETA
 8. Fetch CAMS pakai clustering jarak (§3.1)  ← BUKAN floor(lat/0.4), floor(lon/0.4)
+9. Live mode: dosis diakumulasi INKREMENTAL per update (Δdosis += VE_sekarang × Σ(Cᵢ×Δtᵢ))
+   ← BUKAN VE_sekarang × exposure_seluruh_riwayat dihitung ulang tiap update (§1, §2.1.1)
 ```
 
 ---
@@ -383,6 +408,7 @@ Kesalahan di poin 1–4 bikin app **diam-diam salah tanpa error** — gak crash,
 | 10  | `congestion_ratio` = fungsi `hour × road_class × is_weekend`                | **1.0 seragam**                                              | Monte Carlo: 0/30 ranking flip. Tabel 144-cell sengaja tidak dibangun                                                                                                                                                                                                                                                                                             |
 | 11  | Resolusi CAMS ditulis 11 km di `v4-summary.md`                              | **0.4° ≈ 44 km (nominal)**                                   | 11 km = CAMS Europe. Indonesia pakai CAMS global                                                                                                                                                                                                                                                                                                                  |
 | 12  | Dedup fetch CAMS pakai `floor(lat/0.4), floor(lon/0.4)` (grid quantization) | **Clustering berbasis jarak, threshold 20 km (provisional)** | Empiris: dua titik yang menurut floor-division satu cell yang sama ngasih `base_pm25` beda jauh (52,5 vs 40,2, rute uji `-6.262199,106.668267` → `-6.177820,106.790758`, 120 segmen). Grid quantization gak valid buat granularitas Open-Meteo yang sebenarnya — kemungkinan API-nya interpolasi internal, atau grid asli gak align ke kelipatan 0.4°. Lihat §3.1 |
+| 13  | Live mode: `dosis = VE(HR_sekarang) × exposure_kumulatif_seluruh_riwayat`, dihitung ulang dari nol tiap update lokasi | **Akumulasi inkremental**: `dosis_total += VE(HR_sekarang) × Σ(Cᵢ × Δtᵢ)`, `Δtᵢ` = durasi baru sejak update terakhir | `VE` berbasis HR (§2.1.1) berubah-ubah sepanjang ride begitu diimplementasi. Versi lama nge-*retroactively rescale* seluruh riwayat paparan pakai HR sesaat pas query — porsi waktu dari 2 jam lalu ikut kena HR barusan. Ini contoh nyata kenapa `VE` harus di dalam Σ kalau gak konstan (§1) |
 
 Efek gabungan item 2 + 3 ke angka dosis absolut: `0.014 × 1.5 = 0.021` → `0.040`, naik **~1,9×**. Ranking gak berubah sama sekali.
 
