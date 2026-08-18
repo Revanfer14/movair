@@ -27,7 +27,7 @@ final class RouteSelectionViewModel: ObservableObject {
     private var routeTask: Task<Void, Never>?
     private var lastEstimationResult: RouteExposureEstimationResult?
     private var lastOrigin: CLLocationCoordinate2D?
-    private var lastDestination: CLLocationCoordinate2D?
+    private var lastDestination: SelectedDestination?
     private var lastEstimationDate: Date?
 
     init(
@@ -135,7 +135,7 @@ final class RouteSelectionViewModel: ObservableObject {
                 let result = try await estimator.estimate(routes: routesForPlanning, date: estimationDate)
                 guard !Task.isCancelled else { return }
                 self.lastOrigin = origin
-                self.lastDestination = destination.coordinate
+                self.lastDestination = destination
                 self.lastEstimationDate = estimationDate
                 self.applyFetchedRoutes(routesForPlanning, result: result)
             } catch is CancellationError {
@@ -355,7 +355,11 @@ final class RouteSelectionViewModel: ObservableObject {
             createdAtWIB: WIBTime.iso8601String(for: date),
             modelVersion: result.modelVersion,
             origin: RoutePlanPayload.Coordinate(lat: origin.latitude, lon: origin.longitude),
-            destination: RoutePlanPayload.Coordinate(lat: destination.latitude, lon: destination.longitude),
+            destination: RoutePlanPayload.Destination(
+                name: destination.title,
+                lat: destination.coordinate.latitude,
+                lon: destination.coordinate.longitude
+            ),
             chosenRank: chosenRank,
             equivalentExposure: routes.first?.hasEquivalentExposure ?? false,
             weather: weather,
