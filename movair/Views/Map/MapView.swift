@@ -75,6 +75,7 @@ struct MapView: View {
                     if !presented {
                         searchViewModel.clearSelection()
                         completedTrip = nil
+                        phoneConnectivity.resetToIdle()
                         phase = .browsing
                     }
                 }
@@ -96,6 +97,7 @@ struct MapView: View {
                     navigationStartError = nil
                     let origin = routeSelectionViewModel.originTitle
                     let destination = routeSelectionViewModel.destination?.title ?? "Destination"
+                    phoneConnectivity.resetForNewRide()
                     Task {
                         defer { isStartingNavigation = false }
                         do {
@@ -116,6 +118,7 @@ struct MapView: View {
                 },
                 onClose: {
                     searchViewModel.clearSelection()
+                    phoneConnectivity.resetToIdle()
                     phase = .browsing
                 }
             )
@@ -151,6 +154,7 @@ struct MapView: View {
                 TripSummaryView(trip: trip) {
                     searchViewModel.clearSelection()
                     completedTrip = nil
+                    phoneConnectivity.resetToIdle()
                     phase = .browsing
                 }
             } else {

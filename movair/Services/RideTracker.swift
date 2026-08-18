@@ -12,7 +12,6 @@ final class RideTracker {
     private var elapsedDuration: TimeInterval = 0
     private var unattributedDuration: TimeInterval = 0
     private var travelledDistanceMeters: Double = 0
-    private var offRouteStartedUptime: TimeInterval?
     private var isOffRoute = false
 
     init(segments: [RouteSegment]) {
@@ -27,15 +26,16 @@ final class RideTracker {
         updateTravelledDistance(with: location)
 
         guard let match = closestMatch(to: location.coordinate) else {
+            attributeToActiveSegment(elapsed: delta)
             return snapshot()
         }
 
         if match.distanceToRouteMeters > DoseConstants.offRouteDistanceMeters {
-            updateOffRouteState(at: uptime, elapsed: delta)
+            isOffRoute = true
+            attributeToActiveSegment(elapsed: delta, fallbackRouteDistance: match.routeDistanceMeters)
             return snapshot()
         }
 
-        offRouteStartedUptime = nil
         isOffRoute = false
         let matchedIndex = segmentIndex(for: match.routeDistanceMeters)
         accumulate(elapsed: delta, toward: matchedIndex, routeDistanceMeters: match.routeDistanceMeters)
@@ -70,30 +70,32 @@ final class RideTracker {
         travelledDistanceMeters += distance
     }
 
-    private func updateOffRouteState(at uptime: TimeInterval, elapsed: TimeInterval) {
-        if offRouteStartedUptime == nil {
-            offRouteStartedUptime = uptime
-            accumulate(elapsed: elapsed, toward: activeSegmentIndex, routeDistanceMeters: nil)
-            return
-        }
-        if let offRouteStartedUptime, uptime - offRouteStartedUptime > DoseConstants.offRouteGraceSeconds {
-            isOffRoute = true
-            unattributedDuration += elapsed
+    private func attributeToActiveSegment(elapsed: TimeInterval, fallbackRouteDistance: Double? = nil) {
+        guard !segments.isEmpty else { return }
+        if let activeSegmentIndex {
+            segmentDurations[activeSegmentIndex] += elapsed
         } else {
-            accumulate(elapsed: elapsed, toward: activeSegmentIndex, routeDistanceMeters: nil)
+            let initialIndex: Int
+            if let fallbackRouteDistance {
+                initialIndex = segmentIndex(for: fallbackRouteDistance)
+            } else {
+                initialIndex = 0
+            }
+            activeSegmentIndex = initialIndex
+            segmentDurations[initialIndex] += elapsed
         }
     }
 
     private func accumulate(
         elapsed: TimeInterval,
-        toward matchedIndex: Int?,
-        routeDistanceMeters: Double?
+        toward matchedIndex: Int,
+        routeDistanceMeters: Double
     ) {
         guard !segments.isEmpty else { return }
-        let matchedIndex = matchedIndex ?? activeSegmentIndex ?? 0
 
         guard let activeSegmentIndex else {
             self.activeSegmentIndex = matchedIndex
+            segmentDurations[matchedIndex] += elapsed
             return
         }
 
@@ -105,11 +107,11 @@ final class RideTracker {
         if matchedIndex > activeSegmentIndex {
             let boundary = segments[activeSegmentIndex].endDistanceMeters
                 + DoseConstants.forwardTransitionBufferMeters
-            if let routeDistanceMeters, routeDistanceMeters < boundary {
+            if routeDistanceMeters < boundary {
                 segmentDurations[activeSegmentIndex] += elapsed
                 return
             }
-            distribute(elapsed: elapsed, from: activeSegmentIndex, through: matchedIndex)
+            segmentDurations[matchedIndex] += elapsed
             self.activeSegmentIndex = matchedIndex
             backwardCandidateIndex = nil
             backwardCandidateCount = 0
@@ -132,21 +134,6 @@ final class RideTracker {
         self.activeSegmentIndex = matchedIndex
         backwardCandidateIndex = nil
         backwardCandidateCount = 0
-    }
-
-    private func distribute(elapsed: TimeInterval, from startIndex: Int, through endIndex: Int) {
-        let indices = startIndex...endIndex
-        let totalDistance = indices.reduce(0.0) { $0 + segments[$1].distanceMeters }
-        guard totalDistance > 0 else {
-            segmentDurations[startIndex] += elapsed
-            return
-        }
-        for index in indices {
-            segmentDurations[index] += elapsed * (segments[index].distanceMeters / totalDistance)
-            if index > startIndex && index < endIndex {
-                interpolatedSegmentFlags[index] = true
-            }
-        }
     }
 
     private func segmentIndex(for routeDistanceMeters: Double) -> Int {

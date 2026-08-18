@@ -79,6 +79,50 @@ final class PhoneConnectivityManager: NSObject, ObservableObject {
         )
     }
 
+    func resetForNewRide() {
+        lastSentPayload = nil
+        latestHeartRateBPM = nil
+        let payload = WatchSessionPayload(
+            phase: .active,
+            distanceKm: 0,
+            exposureUg: 0,
+            elapsedMinutes: 0
+        )
+        lastSentPayload = payload
+
+        guard let session, session.activationState == .activated else { return }
+        let dict = payload.asDictionary
+        do {
+            try session.updateApplicationContext(dict)
+        } catch {
+        }
+        if session.isReachable {
+            session.sendMessage(dict, replyHandler: nil, errorHandler: nil)
+        }
+    }
+
+    func resetToIdle() {
+        lastSentPayload = nil
+        latestHeartRateBPM = nil
+        let payload = WatchSessionPayload(
+            phase: .idle,
+            distanceKm: 0,
+            exposureUg: 0,
+            elapsedMinutes: 0
+        )
+        lastSentPayload = payload
+
+        guard let session, session.activationState == .activated else { return }
+        let dict = payload.asDictionary
+        do {
+            try session.updateApplicationContext(dict)
+        } catch {
+        }
+        if session.isReachable {
+            session.sendMessage(dict, replyHandler: nil, errorHandler: nil)
+        }
+    }
+
     func consumeAction() {
         incomingAction = nil
     }
@@ -204,6 +248,7 @@ extension PhoneConnectivityManager: WCSessionDelegate {
     private func handleIncoming(_ message: [String: Any]) {
         if let heartRateBPM = message[WCKeys.heartRateBPM] as? Double {
             latestHeartRateBPM = heartRateBPM
+            print("[WatchConnectivity] Received HR from Apple Watch: \(String(format: "%.1f", heartRateBPM)) BPM")
             return
         }
 
