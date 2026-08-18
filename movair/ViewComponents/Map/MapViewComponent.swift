@@ -6,6 +6,68 @@ final class RoutePolyline: MKPolyline, @unchecked Sendable {
     var isSelected: Bool = false
 }
 
+<<<<<<< Updated upstream
+=======
+final class DottedConnectorPolyline: MKPolyline, @unchecked Sendable {}
+
+final class RouteStartAnnotation: NSObject, MKAnnotation {
+    let coordinate: CLLocationCoordinate2D
+    var title: String? = "Start of Route"
+
+    init(coordinate: CLLocationCoordinate2D) {
+        self.coordinate = coordinate
+    }
+}
+
+final class UserLocationAnnotationView: MKAnnotationView {
+    private let arrowImageView = UIImageView()
+    private let circleBackground = UIView()
+
+    override init(annotation: MKAnnotation?, reuseIdentifier: String?) {
+        super.init(annotation: annotation, reuseIdentifier: reuseIdentifier)
+        setupUI()
+    }
+
+    required init?(coder aDecoder: NSCoder) {
+        super.init(coder: aDecoder)
+        setupUI()
+    }
+
+    private func setupUI() {
+        frame = CGRect(x: 0, y: 0, width: 48, height: 48)
+        centerOffset = CGPoint(x: 0, y: 0)
+        canShowCallout = false
+        backgroundColor = .clear
+
+        circleBackground.frame = CGRect(x: 2, y: 2, width: 44, height: 44)
+        circleBackground.backgroundColor = .white
+        circleBackground.layer.cornerRadius = 22
+        circleBackground.layer.shadowColor = UIColor.black.cgColor
+        circleBackground.layer.shadowOpacity = 0.22
+        circleBackground.layer.shadowOffset = CGSize(width: 0, height: 3)
+        circleBackground.layer.shadowRadius = 5
+        circleBackground.layer.borderWidth = 2
+        circleBackground.layer.borderColor = UIColor.white.cgColor
+        addSubview(circleBackground)
+
+        arrowImageView.frame = CGRect(x: 10, y: 10, width: 24, height: 24)
+        arrowImageView.contentMode = .scaleAspectFit
+        let config = UIImage.SymbolConfiguration(pointSize: 20, weight: .bold)
+        arrowImageView.image = UIImage(systemName: "location.north.fill", withConfiguration: config)
+        arrowImageView.tintColor = UIColor(Color.Brand.blue600)
+        circleBackground.addSubview(arrowImageView)
+    }
+
+    func updateHeading(deviceHeading: Double, cameraHeading: Double) {
+        let relativeAngle = deviceHeading - cameraHeading
+        let radians = relativeAngle * .pi / 180.0
+        UIView.animate(withDuration: 0.2, delay: 0, options: [.beginFromCurrentState, .curveEaseOut]) {
+            self.arrowImageView.transform = CGAffineTransform(rotationAngle: CGFloat(radians))
+        }
+    }
+}
+
+>>>>>>> Stashed changes
 struct MapViewComponent: UIViewRepresentable {
     @Binding var recenterTrigger: Bool
 
@@ -64,6 +126,18 @@ struct MapViewComponent: UIViewRepresentable {
         updateOverlays(on: mapView)
         updateAnnotations(on: mapView)
 
+        if let userView = mapView.view(for: mapView.userLocation) as? UserLocationAnnotationView {
+            let deviceHeading: Double = {
+                if let heading = userHeading {
+                    let deg = heading.trueHeading >= 0 ? heading.trueHeading : heading.magneticHeading
+                    if deg >= 0 { return deg }
+                }
+                return routeHeading ?? 0
+            }()
+            let cameraHeading = mapView.camera.heading
+            userView.updateHeading(deviceHeading: deviceHeading, cameraHeading: cameraHeading)
+        }
+
         if isNavigationTracking {
             updateNavigationCamera(on: mapView, context: context)
             return
@@ -101,16 +175,26 @@ struct MapViewComponent: UIViewRepresentable {
     private func updateNavigationCamera(on mapView: MKMapView, context: Context) {
         guard let centerCoordinate else { return }
 
-        let headingValue: Double = {
-            if let routeHeading {
-                return routeHeading
-            }
+        let targetHeading: Double = {
             if let heading = userHeading {
                 let deg = heading.trueHeading >= 0 ? heading.trueHeading : heading.magneticHeading
                 if deg >= 0 { return deg }
             }
+            if let routeHeading {
+                return routeHeading
+            }
             return mapView.camera.heading
         }()
+
+        var targetAltitude = navigationAltitude
+        if let firstCoord = routeCoordinates.first {
+            let userLoc = CLLocation(latitude: centerCoordinate.latitude, longitude: centerCoordinate.longitude)
+            let startLoc = CLLocation(latitude: firstCoord.latitude, longitude: firstCoord.longitude)
+            let dist = userLoc.distance(from: startLoc)
+            if dist > 15 && dist < 300 {
+                targetAltitude = max(navigationAltitude, dist * 2.2)
+            }
+        }
 
         let isInitial = !context.coordinator.hasCenteredNavigation
         let shouldForceUpdate = recenterTrigger || isInitial
@@ -118,14 +202,14 @@ struct MapViewComponent: UIViewRepresentable {
         if shouldForceUpdate {
             let camera = MKMapCamera(
                 lookingAtCenter: centerCoordinate,
-                fromDistance: navigationAltitude,
+                fromDistance: targetAltitude,
                 pitch: navigationPitch,
-                heading: headingValue
+                heading: targetHeading
             )
             mapView.setCamera(camera, animated: !isInitial)
             context.coordinator.hasCenteredNavigation = true
             context.coordinator.userHasDraggedMap = false
-            context.coordinator.lastAppliedHeading = headingValue
+            context.coordinator.lastAppliedHeading = targetHeading
             context.coordinator.lastAppliedCenter = centerCoordinate
             if recenterTrigger {
                 DispatchQueue.main.async { recenterTrigger = false }
@@ -135,8 +219,7 @@ struct MapViewComponent: UIViewRepresentable {
 
         if !context.coordinator.userHasDraggedMap {
             let lastHeading = context.coordinator.lastAppliedHeading
-            let diff = abs(headingValue - lastHeading)
-            let normalizedDiff = min(diff, 360 - diff)
+            let angleDiff = abs(Self.shortestAngleDifference(from: lastHeading, to: targetHeading))
 
             let lastCenter = context.coordinator.lastAppliedCenter
             let centerMoved: Bool = {
@@ -146,23 +229,42 @@ struct MapViewComponent: UIViewRepresentable {
                 return l1.distance(from: l2) >= 3
             }()
 
-            if normalizedDiff >= 3 || centerMoved {
+            if angleDiff >= 4.5 || centerMoved {
                 let camera = MKMapCamera(
                     lookingAtCenter: centerCoordinate,
-                    fromDistance: navigationAltitude,
+                    fromDistance: targetAltitude,
                     pitch: navigationPitch,
-                    heading: headingValue
+                    heading: targetHeading
                 )
                 mapView.setCamera(camera, animated: true)
-                context.coordinator.lastAppliedHeading = headingValue
+                context.coordinator.lastAppliedHeading = targetHeading
                 context.coordinator.lastAppliedCenter = centerCoordinate
             }
         }
     }
 
+    private static func shortestAngleDifference(from: Double, to: Double) -> Double {
+        let diff = (to - from + 540).truncatingRemainder(dividingBy: 360) - 180
+        return diff
+    }
+
     private func updateOverlays(on mapView: MKMapView) {
         mapView.removeOverlays(mapView.overlays)
 
+<<<<<<< Updated upstream
+=======
+        if isNavigationTracking, let userCoord = centerCoordinate, let firstRouteCoord = routeCoordinates.first {
+            let userLoc = CLLocation(latitude: userCoord.latitude, longitude: userCoord.longitude)
+            let startLoc = CLLocation(latitude: firstRouteCoord.latitude, longitude: firstRouteCoord.longitude)
+            let distanceToStart = userLoc.distance(from: startLoc)
+
+            if distanceToStart > 10 {
+                let connector = DottedConnectorPolyline(coordinates: [userCoord, firstRouteCoord], count: 2)
+                mapView.addOverlay(connector)
+            }
+        }
+
+>>>>>>> Stashed changes
         if !routeOptions.isEmpty {
             let unselectedRoutes = routeOptions.filter { $0.id != selectedRouteID }
             for route in unselectedRoutes {
@@ -188,6 +290,11 @@ struct MapViewComponent: UIViewRepresentable {
     private func updateAnnotations(on mapView: MKMapView) {
         let existing = mapView.annotations.filter { !($0 is MKUserLocation) }
         mapView.removeAnnotations(existing)
+
+        if isNavigationTracking, let firstCoord = routeCoordinates.first {
+            let startAnnotation = RouteStartAnnotation(coordinate: firstCoord)
+            mapView.addAnnotation(startAnnotation)
+        }
 
         if showsOriginMarker, let originCoordinate {
             let origin = EndpointAnnotation(
@@ -354,6 +461,18 @@ struct MapViewComponent: UIViewRepresentable {
         }
 
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+<<<<<<< Updated upstream
+=======
+            if overlay is DottedConnectorPolyline {
+                let renderer = MKPolylineRenderer(overlay: overlay)
+                renderer.strokeColor = UIColor.white.withAlphaComponent(0.85)
+                renderer.lineWidth = 6
+                renderer.lineCap = .round
+                renderer.lineDashPattern = [1, 12]
+                return renderer
+            }
+
+>>>>>>> Stashed changes
             if let routePolyline = overlay as? RoutePolyline {
                 let renderer = MKPolylineRenderer(polyline: routePolyline)
                 if routePolyline.isSelected {
@@ -380,7 +499,33 @@ struct MapViewComponent: UIViewRepresentable {
         }
 
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
-            guard !(annotation is MKUserLocation) else { return nil }
+            if annotation is MKUserLocation {
+                let id = "userLocation"
+                let userView = mapView.dequeueReusableAnnotationView(withIdentifier: id) as? UserLocationAnnotationView
+                    ?? UserLocationAnnotationView(annotation: annotation, reuseIdentifier: id)
+                userView.annotation = annotation
+                let deviceHeading = parent.userHeading?.trueHeading ?? parent.userHeading?.magneticHeading ?? parent.routeHeading ?? 0
+                let cameraHeading = mapView.camera.heading
+                userView.updateHeading(deviceHeading: deviceHeading, cameraHeading: cameraHeading)
+                return userView
+            }
+
+            if annotation is RouteStartAnnotation {
+                let id = "routeStart"
+                let view = mapView.dequeueReusableAnnotationView(withIdentifier: id) ?? MKAnnotationView(annotation: annotation, reuseIdentifier: id)
+                view.annotation = annotation
+                view.frame = CGRect(x: 0, y: 0, width: 20, height: 20)
+                view.backgroundColor = .white
+                view.layer.cornerRadius = 10
+                view.layer.borderWidth = 4
+                view.layer.borderColor = UIColor(Color.Brand.blue600).cgColor
+                view.layer.shadowColor = UIColor.black.cgColor
+                view.layer.shadowOpacity = 0.25
+                view.layer.shadowOffset = CGSize(width: 0, height: 2)
+                view.layer.shadowRadius = 3
+                view.canShowCallout = false
+                return view
+            }
 
             if let endpoint = annotation as? EndpointAnnotation {
                 let id = endpoint.kind == .origin ? "origin" : "destination"

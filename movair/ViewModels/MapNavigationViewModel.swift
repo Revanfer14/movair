@@ -134,7 +134,18 @@ final class MapNavigationViewModel: ObservableObject {
         hasArrivedAtDestination = false
         isUpdatingDose = false
 
-        if route.coordinates.count >= 2 {
+        if let first = route.coordinates.first, let userCoord = self.originCoordinate {
+            let userLoc = CLLocation(latitude: userCoord.latitude, longitude: userCoord.longitude)
+            let startLoc = CLLocation(latitude: first.latitude, longitude: first.longitude)
+            let distanceToStart = userLoc.distance(from: startLoc)
+            if distanceToStart > 12 {
+                routeHeadingDegrees = Self.calculateBearing(from: userCoord, to: first)
+            } else if route.coordinates.count >= 2 {
+                routeHeadingDegrees = Self.calculateBearing(from: route.coordinates[0], to: route.coordinates[1])
+            } else {
+                routeHeadingDegrees = nil
+            }
+        } else if route.coordinates.count >= 2 {
             routeHeadingDegrees = Self.calculateBearing(from: route.coordinates[0], to: route.coordinates[1])
         } else {
             routeHeadingDegrees = nil
@@ -189,6 +200,10 @@ final class MapNavigationViewModel: ObservableObject {
         }
         currentInstructionIndex = 0
         selectedUpcomingOffset = 0
+
+        if let initialSnapshot = rideTracker?.snapshot() {
+            scheduleDoseUpdate(for: initialSnapshot)
+        }
     }
 
     func process(location: CLLocation) {
@@ -203,6 +218,9 @@ final class MapNavigationViewModel: ObservableObject {
 
     func updateHeartRate(_ bpm: Double?) {
         latestHeartRateBPM = bpm
+        if let bpm {
+            print("[MapNavigationViewModel] Realtime HR Updated: \(String(format: "%.1f", bpm)) BPM -> Recalculating Live Inhaled Dose")
+        }
         if let latestTrackingSnapshot {
             scheduleDoseUpdate(for: latestTrackingSnapshot)
         }
@@ -324,6 +342,15 @@ final class MapNavigationViewModel: ObservableObject {
 
     private func updateRouteHeading(with location: CLLocation) {
         guard routeCoordinates.count >= 2 else { return }
+
+        if let firstCoord = routeCoordinates.first, currentInstructionIndex == 0 {
+            let firstLoc = CLLocation(latitude: firstCoord.latitude, longitude: firstCoord.longitude)
+            let distanceToStart = location.distance(from: firstLoc)
+            if distanceToStart > 12 {
+                routeHeadingDegrees = Self.calculateBearing(from: location.coordinate, to: firstCoord)
+                return
+            }
+        }
 
         var closestIndex = 0
         var minDistance: CLLocationDistance = .greatestFiniteMagnitude
