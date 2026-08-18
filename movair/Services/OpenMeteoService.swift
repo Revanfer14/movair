@@ -28,14 +28,17 @@ final class OpenMeteoService: OpenMeteoProviding {
               let weatherIndex,
               airQualityResponse.hourly.pm25.indices.contains(airQualityIndex),
               weatherResponse.hourly.windSpeed.indices.contains(weatherIndex),
-              weatherResponse.hourly.relativeHumidity.indices.contains(weatherIndex) else {
+              weatherResponse.hourly.relativeHumidity.indices.contains(weatherIndex),
+              weatherResponse.hourly.temperature.indices.contains(weatherIndex) else {
             throw ExposureEstimationError.unavailableData
         }
 
         return WeatherSnapshot(
             basePM25: airQualityResponse.hourly.pm25[airQualityIndex],
             windSpeedMetersPerSecond: weatherResponse.hourly.windSpeed[weatherIndex],
-            relativeHumidityPercent: weatherResponse.hourly.relativeHumidity[weatherIndex]
+            relativeHumidityPercent: weatherResponse.hourly.relativeHumidity[weatherIndex],
+            temperatureCelsius: weatherResponse.hourly.temperature[weatherIndex],
+            coordinate: coordinate
         )
     }
 
@@ -63,7 +66,8 @@ final class OpenMeteoService: OpenMeteoProviding {
         components.queryItems = [
             URLQueryItem(name: "latitude", value: String(coordinate.latitude)),
             URLQueryItem(name: "longitude", value: String(coordinate.longitude)),
-            URLQueryItem(name: "hourly", value: "wind_speed_10m,relative_humidity_2m"),
+            // URLQueryItem(name: "hourly", value: "wind_speed_10m,relative_humidity_2m"),
+            URLQueryItem(name: "hourly", value: "wind_speed_10m,relative_humidity_2m,temperature_2m"),
             URLQueryItem(name: "wind_speed_unit", value: "ms"),
             URLQueryItem(name: "timezone", value: "Asia/Jakarta"),
             URLQueryItem(name: "forecast_days", value: "1")
@@ -126,11 +130,13 @@ final class OpenMeteoService: OpenMeteoProviding {
         let time: [String]
         let windSpeed: [Double]
         let relativeHumidity: [Double]
+        let temperature: [Double]
 
         enum CodingKeys: String, CodingKey {
             case time
             case windSpeed = "wind_speed_10m"
             case relativeHumidity = "relative_humidity_2m"
+            case temperature = "temperature_2m"
         }
     }
 }

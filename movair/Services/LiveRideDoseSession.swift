@@ -1,6 +1,7 @@
 import CoreLocation
 import Foundation
 
+
 struct LiveDoseSnapshot: Equatable {
     let doseMicrograms: Double
     let segmentConcentrations: [Double]
@@ -39,7 +40,8 @@ actor LiveRideDoseSession {
         }
 
         let resolvedRoadDataStore = try roadDataStore ?? RoadDataStore.shared ?? RoadDataStore()
-        let resolvedPredictor = try predictor ?? PMPredictor()
+        // let resolvedPredictor = try predictor ?? PMPredictor()
+        let resolvedPredictor = predictor ?? RemotePMPredictor()
 
         self.segments = segments
         self.weatherService = weatherService
@@ -61,38 +63,38 @@ actor LiveRideDoseSession {
     }
 
     func apply(
-        snapshot: RideTrackingSnapshot,
-        date: Date = Date(),
-        heartRateBPM: Double = 0
-    ) async throws -> LiveDoseSnapshot {
-        try await refreshIfHourChanged(
-            date: date,
-            activeSegmentIndex: snapshot.activeSegmentIndex
-        )
+            snapshot: RideTrackingSnapshot,
+            date: Date = Date(),
+            heartRateBPM: Double = 0
+        ) async throws -> LiveDoseSnapshot {
+            try await refreshIfHourChanged(
+                date: date,
+                activeSegmentIndex: snapshot.activeSegmentIndex
+            )
 
-        let concentrations = segmentConcentrations()
-        let deltaDurationsMinutes = zip(snapshot.segmentDurations, previousSegmentDurationsSeconds).map {
-            max(0, $0 - $1) / 60
+            let concentrations = segmentConcentrations()
+            let deltaDurationsMinutes = zip(snapshot.segmentDurations, previousSegmentDurationsSeconds).map {
+                max(0, $0 - $1) / 60
+            }
+            let deltaExposure = DoseCalculator.exposure(
+                concentrations: concentrations,
+                durationsMinutes: deltaDurationsMinutes
+            )
+            let currentVentilationRate = ventilationRateProvider.ventilationRate(heartRateBPM: heartRateBPM)
+            accumulatedDoseMicrograms += DoseCalculator.doseMicrograms(
+                exposure: deltaExposure,
+                ventilationRate: currentVentilationRate
+            )
+            previousSegmentDurationsSeconds = snapshot.segmentDurations
+
+            return LiveDoseSnapshot(
+                doseMicrograms: accumulatedDoseMicrograms,
+                segmentConcentrations: concentrations,
+                unattributedDurationSeconds: snapshot.unattributedDuration,
+                interpolatedSegmentFlags: snapshot.interpolatedSegmentFlags,
+                isOffRoute: snapshot.isOffRoute
+            )
         }
-        let deltaExposure = DoseCalculator.exposure(
-            concentrations: concentrations,
-            durationsMinutes: deltaDurationsMinutes
-        )
-        let currentVentilationRate = ventilationRateProvider.ventilationRate(heartRateBPM: heartRateBPM)
-        accumulatedDoseMicrograms += DoseCalculator.doseMicrograms(
-            exposure: deltaExposure,
-            ventilationRate: currentVentilationRate
-        )
-        previousSegmentDurationsSeconds = snapshot.segmentDurations
-
-        return LiveDoseSnapshot(
-            doseMicrograms: accumulatedDoseMicrograms,
-            segmentConcentrations: concentrations,
-            unattributedDurationSeconds: snapshot.unattributedDuration,
-            interpolatedSegmentFlags: snapshot.interpolatedSegmentFlags,
-            isOffRoute: snapshot.isOffRoute
-        )
-    }
 
     func makeRideRecord(from snapshot: RideTrackingSnapshot, doseMicrograms: Double) -> RideRecord {
         RideRecord(
@@ -128,15 +130,35 @@ actor LiveRideDoseSession {
             throw ExposureEstimationError.routeOutsideValidatedCoverage
         }
 
-        var basePM25ByCell: [CAMSCell: Double] = [:]
-        for cell in unlockedCells {
-            let weather = try await weatherService.weather(at: cell.centroid, date: date)
-            do {
-                basePM25ByCell[cell] = try predictor.predict(snapshot: weather, date: date)
-            } catch {
-                throw ExposureEstimationError.modelPredictionFailed
-            }
+        let orderedCells = Array(unlockedCells)
+        var snapshotsByCell: [CAMSCell: WeatherSnapshot] = [:]
+        for cell in orderedCells {
+            snapshotsByCell[cell] = try await weatherService.weather(at: cell.centroid, date: date)
         }
+        let snapshots = orderedCells.compactMap { snapshotsByCell[$0] }
+        guard snapshots.count == orderedCells.count else {
+            throw ExposureEstimationError.unavailableData
+        }
+
+        // var basePM25ByCell: [CAMSCell: Double] = [:]
+        // for cell in unlockedCells {
+        //     let weather = try await weatherService.weather(at: cell.centroid, date: date)
+        //     do {
+        //         basePM25ByCell[cell] = try predictor.predict(snapshot: weather, date: date)
+        //     } catch {
+        //         throw ExposureEstimationError.modelPredictionFailed
+        //     }
+        // }
+        let predictions: [Double]
+        do {
+            predictions = try await predictor.predict(snapshots: snapshots, date: date)
+        } catch {
+            throw ExposureEstimationError.modelPredictionFailed
+        }
+        guard predictions.count == orderedCells.count else {
+            throw ExposureEstimationError.modelPredictionFailed
+        }
+        let basePM25ByCell = Dictionary(uniqueKeysWithValues: zip(orderedCells, predictions))
 
         for (index, segment) in segments.enumerated() where !lockedSegmentIndices.contains(index) {
             let cell = CAMSCell(coordinate: segment.midpoint)

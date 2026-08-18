@@ -9,6 +9,7 @@ struct MapView: View {
     @StateObject private var activeNavigationViewModel = MapNavigationViewModel()
     @ObservedObject private var tripStore = TripHistoryStore.shared
     @ObservedObject private var phoneConnectivity = PhoneConnectivityManager.shared
+    private let routePlanArchiver: RoutePlanArchiving = RoutePlanArchiver()
 
     @State private var phase: NavigationPhase = .browsing
     @State private var isSearchPresented = false
@@ -108,6 +109,11 @@ struct MapView: View {
                             )
                             locationManager.startRideTracking()
                             phase = .navigating
+                            if let payload = routeSelectionViewModel.routePlanPayload(chosenRouteID: route.id) {
+                                Task.detached(priority: .background) {
+                                    await routePlanArchiver.archive(payload)
+                                }
+                            }
                         } catch {
                             navigationStartError = (error as? ExposureEstimationError)?.userMessage
                                 ?? "Live exposure tracking could not be started. Please try again."

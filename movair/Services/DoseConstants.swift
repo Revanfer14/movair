@@ -14,4 +14,7 @@ enum DoseConstants {
     static let offRouteDistanceMeters = 50.0
     static let offRouteGraceSeconds: TimeInterval = 15
     static let backwardTransitionConfirmCount = 3
+    static let maxPredictRowsPerRequest = 64
+    static let maxArchivedSegments = 2000
+    static let serverRequestTimeout: TimeInterval = 15
 }
