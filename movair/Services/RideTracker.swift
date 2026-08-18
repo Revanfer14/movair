@@ -13,9 +13,13 @@ final class RideTracker {
     private var unattributedDuration: TimeInterval = 0
     private var travelledDistanceMeters: Double = 0
     private var isOffRoute = false
-    private var travelledCoordinates: [CLLocationCoordinate2D] = []
+    private var travelledTracePoints: [RideTracePoint] = []
     private var lastTraceLocation: CLLocation?
     private var traceSpacingMeters = DoseConstants.traceMinimumSpacingMeters
+
+    private var travelledCoordinates: [CLLocationCoordinate2D] {
+        travelledTracePoints.map(\.coordinate)
+    }
 
     init(segments: [RouteSegment]) {
         self.segments = segments
@@ -54,7 +58,8 @@ final class RideTracker {
             isOffRoute: isOffRoute,
             activeSegmentIndex: activeSegmentIndex,
             interpolatedSegmentFlags: interpolatedSegmentFlags,
-            travelledCoordinates: travelledCoordinates
+            travelledCoordinates: travelledCoordinates,
+            travelledTracePoints: travelledTracePoints
         )
     }
 
@@ -91,32 +96,39 @@ final class RideTracker {
         guard location.horizontalAccuracy >= 0,
               location.horizontalAccuracy <= DoseConstants.traceMaximumAccuracyMeters else { return }
 
+        let tracePoint = RideTracePoint(
+            coordinate: location.coordinate,
+            timestamp: location.timestamp,
+            horizontalAccuracy: location.horizontalAccuracy,
+            speed: location.speed
+        )
+
         guard let previousTraceLocation = lastTraceLocation else {
             lastTraceLocation = location
-            travelledCoordinates.append(location.coordinate)
+            travelledTracePoints.append(tracePoint)
             return
         }
 
         guard location.distance(from: previousTraceLocation) >= traceSpacingMeters else { return }
         lastTraceLocation = location
-        travelledCoordinates.append(location.coordinate)
+        travelledTracePoints.append(tracePoint)
 
-        if travelledCoordinates.count > DoseConstants.traceMaximumPointCount {
-            decimateTravelledCoordinates()
+        if travelledTracePoints.count > DoseConstants.traceMaximumPointCount {
+            decimateTracePoints()
         }
     }
 
-    private func decimateTravelledCoordinates() {
-        guard travelledCoordinates.count > 2 else { return }
-        var decimated: [CLLocationCoordinate2D] = []
-        decimated.reserveCapacity(travelledCoordinates.count / 2 + 1)
-        for (index, coordinate) in travelledCoordinates.enumerated() {
-            let isEndpoint = index == 0 || index == travelledCoordinates.count - 1
+    private func decimateTracePoints() {
+        guard travelledTracePoints.count > 2 else { return }
+        var decimated: [RideTracePoint] = []
+        decimated.reserveCapacity(travelledTracePoints.count / 2 + 1)
+        for (index, point) in travelledTracePoints.enumerated() {
+            let isEndpoint = index == 0 || index == travelledTracePoints.count - 1
             if isEndpoint || index % 2 == 0 {
-                decimated.append(coordinate)
+                decimated.append(point)
             }
         }
-        travelledCoordinates = decimated
+        travelledTracePoints = decimated
         traceSpacingMeters *= 2
     }
 

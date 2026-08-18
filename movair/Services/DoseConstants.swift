@@ -25,4 +25,5 @@ enum DoseConstants {
     static let localMatchWindowMeters = 150.0
     static let localMatchInitialRadiusSegments = 5
     static let traceBreakDistanceMeters = 150.0
+    static let pendingRideRecordRetentionSeconds: TimeInterval = 30 * 24 * 3600
 }

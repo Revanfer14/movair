@@ -68,10 +68,12 @@ final class MapNavigationViewModel: ObservableObject {
     @Published var originTitle: String = "Current location"
     @Published var destinationTitle: String = "Destination"
     @Published var startedAt: Date = Date()
+    private(set) var routePlanID: String?
     @Published var isPreparingDose = false
     @Published var hasArrivedAtDestination: Bool = false
     @Published private(set) var latestHeartRateBPM: Double?
     @Published private(set) var routeHeadingDegrees: Double?
+    private(set) var lastRideRecordPayload: RideRecordPayload?
 
     private var rideTracker: RideTracker?
     private var doseSession: LiveRideDoseSession?
@@ -99,10 +101,12 @@ final class MapNavigationViewModel: ObservableObject {
         originTitle: String = "Current location",
         destinationTitle: String = "Destination",
         originCoordinate: CLLocationCoordinate2D? = nil,
-        destinationCoordinate: CLLocationCoordinate2D? = nil
+        destinationCoordinate: CLLocationCoordinate2D? = nil,
+        routePlanID: String? = nil
     ) async throws {
         self.originTitle = originTitle
         self.destinationTitle = destinationTitle
+        self.routePlanID = routePlanID
         self.originCoordinate = originCoordinate ?? route.coordinates.first
         if let destinationCoordinate {
             self.destinationCoordinate = destinationCoordinate
@@ -137,6 +141,7 @@ final class MapNavigationViewModel: ObservableObject {
         latestHeartRateBPM = nil
         hasArrivedAtDestination = false
         isUpdatingDose = false
+        lastRideRecordPayload = nil
 
         if let first = route.coordinates.first, let userCoord = self.originCoordinate {
             let userLoc = CLLocation(latitude: userCoord.latitude, longitude: userCoord.longitude)
@@ -247,6 +252,7 @@ final class MapNavigationViewModel: ObservableObject {
             applyTrackingMetrics(finalSnapshot)
         }
         let rideRecord = await makeRideRecord()
+        lastRideRecordPayload = makeRideRecordPayload(rideRecord: rideRecord, completedAt: completedAt)
         return makeTripSummary(completedAt: completedAt, rideRecord: rideRecord)
     }
 
@@ -268,7 +274,8 @@ final class MapNavigationViewModel: ObservableObject {
             destinationCoordinate: destinationCoordinate,
             segmentConcentrations: rideRecord?.segmentConcentrations ?? [],
             segmentDurationsSeconds: rideRecord?.segmentDurationsSeconds ?? [],
-            completedAt: completedAt
+            completedAt: completedAt,
+            routePlanID: routePlanID
         )
     }
 
@@ -279,6 +286,68 @@ final class MapNavigationViewModel: ObservableObject {
         return await doseSession.makeRideRecord(
             from: snapshot,
             doseMicrograms: latestDoseMicrograms
+        )
+    }
+
+    private func makeRideRecordPayload(rideRecord: RideRecord?, completedAt: Date) -> RideRecordPayload? {
+        guard let rideRecord, let originCoordinate, let destinationCoordinate else {
+            return nil
+        }
+
+        let tracePoints = latestTrackingSnapshot?.travelledTracePoints ?? []
+        let trace = tracePoints.map { point in
+            RideRecordPayload.TracePoint(
+                lat: point.coordinate.latitude,
+                lon: point.coordinate.longitude,
+                tSeconds: max(0, point.timestamp.timeIntervalSince(startedAt)),
+                horizontalAccuracyMeters: point.horizontalAccuracy,
+                speedMetersPerSecond: point.speed
+            )
+        }
+
+        let segments = rideRecord.segmentDurationsSeconds.indices.map { index in
+            RideRecordPayload.Segment(
+                index: index,
+                cI: rideRecord.segmentConcentrations[index],
+                tISeconds: rideRecord.segmentDurationsSeconds[index],
+                cITI: rideRecord.segmentExposures[index],
+                doseMicrograms: rideRecord.segmentDoseMicrograms[index],
+                interpolated: rideRecord.interpolatedSegmentFlags[index]
+            )
+        }
+
+        let totals = RideRecordPayload.Totals(
+            totalDoseMicrograms: rideRecord.totalDoseMicrograms,
+            attributedDurationSeconds: rideRecord.attributedDurationSeconds,
+            unattributedDurationSeconds: rideRecord.unattributedDurationSeconds,
+            elapsedDurationSeconds: elapsedDurationSeconds,
+            travelledDistanceMeters: distanceKm * 1000,
+            averageSpeedKmh: averageSpeedKmh,
+            endedOffRoute: isOffRoute
+        )
+
+        let diagnostics = RideRecordPayload.Diagnostics(
+            lastVentilationRate: rideRecord.lastVentilationRate,
+            lastHeartRateBPM: rideRecord.lastHeartRateBPM,
+            hourRolloverCount: rideRecord.hourRolloverCount
+        )
+
+        return RideRecordPayload(
+            id: UUID().uuidString,
+            routePlanID: routePlanID,
+            modelVersion: rideRecord.modelVersion,
+            startedAtWIB: WIBTime.iso8601String(for: startedAt),
+            completedAtWIB: WIBTime.iso8601String(for: completedAt),
+            origin: RoutePlanPayload.Coordinate(lat: originCoordinate.latitude, lon: originCoordinate.longitude),
+            destination: RoutePlanPayload.Destination(
+                name: destinationTitle,
+                lat: destinationCoordinate.latitude,
+                lon: destinationCoordinate.longitude
+            ),
+            totals: totals,
+            diagnostics: diagnostics,
+            segments: segments,
+            trace: trace
         )
     }
 

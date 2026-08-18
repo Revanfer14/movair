@@ -25,6 +25,11 @@ actor LiveRideDoseSession {
     private let wibTimeZone: TimeZone
     private var previousSegmentDurationsSeconds: [TimeInterval]
     private var accumulatedDoseMicrograms: Double = 0
+    private var doseBySegment: [Double]
+    private var exposureBySegment: [Double]
+    private var hourRolloverCount = 0
+    private var lastVentilationRate: Double = 0
+    private var lastHeartRateBPM: Double = 0
 
     init(
         segments: [RouteSegment],
@@ -60,6 +65,8 @@ actor LiveRideDoseSession {
         }
         self.basePM25BySegment = Array(repeating: 0, count: segments.count)
         self.previousSegmentDurationsSeconds = Array(repeating: 0, count: segments.count)
+        self.doseBySegment = Array(repeating: 0, count: segments.count)
+        self.exposureBySegment = Array(repeating: 0, count: segments.count)
     }
 
     func prepare(date: Date = Date()) async throws {
@@ -82,16 +89,23 @@ actor LiveRideDoseSession {
             let deltaDurationsMinutes = zip(snapshot.segmentDurations, previousSegmentDurationsSeconds).map {
                 max(0, $0 - $1) / 60
             }
-            let deltaExposure = DoseCalculator.exposure(
-                concentrations: concentrations,
-                durationsMinutes: deltaDurationsMinutes
-            )
             let currentVentilationRate = ventilationRateProvider.ventilationRate(heartRateBPM: heartRateBPM)
+
+            var deltaExposure = 0.0
+            for index in deltaDurationsMinutes.indices {
+                let contribution = concentrations[index] * deltaDurationsMinutes[index]
+                exposureBySegment[index] += contribution
+                doseBySegment[index] += currentVentilationRate * contribution
+                deltaExposure += contribution
+            }
+
             accumulatedDoseMicrograms += DoseCalculator.doseMicrograms(
                 exposure: deltaExposure,
                 ventilationRate: currentVentilationRate
             )
             previousSegmentDurationsSeconds = snapshot.segmentDurations
+            lastVentilationRate = currentVentilationRate
+            lastHeartRateBPM = heartRateBPM
 
             return LiveDoseSnapshot(
                 doseMicrograms: accumulatedDoseMicrograms,
@@ -108,13 +122,20 @@ actor LiveRideDoseSession {
             segmentConcentrations: segmentConcentrations(),
             unattributedDurationSeconds: snapshot.unattributedDuration,
             interpolatedSegmentFlags: snapshot.interpolatedSegmentFlags,
-            totalDoseMicrograms: doseMicrograms
+            totalDoseMicrograms: doseMicrograms,
+            segmentDoseMicrograms: doseBySegment,
+            segmentExposures: exposureBySegment,
+            modelVersion: predictor.modelVersion,
+            lastVentilationRate: lastVentilationRate,
+            lastHeartRateBPM: lastHeartRateBPM,
+            hourRolloverCount: hourRolloverCount
         )
     }
 
     private func refreshIfHourChanged(date: Date, activeSegmentIndex: Int?) async throws {
         let hour = wibHour(for: date)
         guard currentWIBHour != hour else { return }
+        hourRolloverCount += 1
 
         if let activeSegmentIndex {
             for index in 0..<activeSegmentIndex {

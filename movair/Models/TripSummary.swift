@@ -21,6 +21,7 @@ struct TripSummary: Identifiable, Equatable, Codable {
     let segmentConcentrations: [Double]
     let segmentDurationsSeconds: [TimeInterval]
     let completedAt: Date
+    let routePlanID: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -42,6 +43,7 @@ struct TripSummary: Identifiable, Equatable, Codable {
         case segmentConcentrations
         case segmentDurationsSeconds
         case completedAt
+        case routePlanID
     }
 
     private struct CoordinatePayload: Codable {
@@ -68,7 +70,8 @@ struct TripSummary: Identifiable, Equatable, Codable {
         destinationCoordinate: CLLocationCoordinate2D? = nil,
         segmentConcentrations: [Double] = [],
         segmentDurationsSeconds: [TimeInterval] = [],
-        completedAt: Date = Date()
+        completedAt: Date = Date(),
+        routePlanID: String? = nil
     ) {
         self.id = id
         self.originTitle = originTitle
@@ -89,6 +92,7 @@ struct TripSummary: Identifiable, Equatable, Codable {
         self.segmentConcentrations = segmentConcentrations
         self.segmentDurationsSeconds = segmentDurationsSeconds
         self.completedAt = completedAt
+        self.routePlanID = routePlanID
     }
 
     init(from decoder: Decoder) throws {
@@ -128,6 +132,7 @@ struct TripSummary: Identifiable, Equatable, Codable {
 
         segmentConcentrations = try container.decodeIfPresent([Double].self, forKey: .segmentConcentrations) ?? []
         segmentDurationsSeconds = try container.decodeIfPresent([TimeInterval].self, forKey: .segmentDurationsSeconds) ?? []
+        routePlanID = try container.decodeIfPresent(String.self, forKey: .routePlanID)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -163,6 +168,7 @@ struct TripSummary: Identifiable, Equatable, Codable {
 
         try container.encode(segmentConcentrations, forKey: .segmentConcentrations)
         try container.encode(segmentDurationsSeconds, forKey: .segmentDurationsSeconds)
+        try container.encodeIfPresent(routePlanID, forKey: .routePlanID)
     }
 
     var displayCoordinates: [CLLocationCoordinate2D] {

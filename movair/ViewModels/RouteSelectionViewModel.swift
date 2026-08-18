@@ -276,7 +276,7 @@ final class RouteSelectionViewModel: ObservableObject {
         return Int((((dose - fastestDose) / fastestDose) * 100).rounded())
     }
 
-    func routePlanPayload(chosenRouteID: UUID) -> RoutePlanPayload? {
+    func routePlanPayload(chosenRouteID: UUID, planID: String) -> RoutePlanPayload? {
         guard let result = lastEstimationResult,
               let origin = lastOrigin,
               let destination = lastDestination,
@@ -351,7 +351,7 @@ final class RouteSelectionViewModel: ObservableObject {
         )
 
         return RoutePlanPayload(
-            id: UUID().uuidString,
+            id: planID,
             createdAtWIB: WIBTime.iso8601String(for: date),
             modelVersion: result.modelVersion,
             origin: RoutePlanPayload.Coordinate(lat: origin.latitude, lon: origin.longitude),

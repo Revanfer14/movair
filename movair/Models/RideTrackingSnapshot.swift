@@ -10,4 +10,5 @@ struct RideTrackingSnapshot {
     let activeSegmentIndex: Int?
     let interpolatedSegmentFlags: [Bool]
     let travelledCoordinates: [CLLocationCoordinate2D]
+    let travelledTracePoints: [RideTracePoint]
 }

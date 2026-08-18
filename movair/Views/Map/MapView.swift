@@ -10,6 +10,7 @@ struct MapView: View {
     @ObservedObject private var tripStore = TripHistoryStore.shared
     @ObservedObject private var phoneConnectivity = PhoneConnectivityManager.shared
     private let routePlanArchiver: RoutePlanArchiving = RoutePlanArchiver()
+    private let rideRecordArchiver: RideRecordArchiving = RideRecordArchiver.shared
 
     @State private var phase: NavigationPhase = .browsing
     @State private var isSearchPresented = false
@@ -98,6 +99,7 @@ struct MapView: View {
                     navigationStartError = nil
                     let origin = routeSelectionViewModel.originTitle
                     let destination = routeSelectionViewModel.destination?.title ?? "Destination"
+                    let planID = UUID().uuidString
                     phoneConnectivity.resetForNewRide()
                     Task {
                         defer { isStartingNavigation = false }
@@ -107,11 +109,12 @@ struct MapView: View {
                                 originTitle: origin,
                                 destinationTitle: destination,
                                 originCoordinate: routeSelectionViewModel.currentOriginCoordinate,
-                                destinationCoordinate: routeSelectionViewModel.destination?.coordinate
+                                destinationCoordinate: routeSelectionViewModel.destination?.coordinate,
+                                routePlanID: planID
                             )
                             locationManager.startRideTracking()
                             phase = .navigating
-                            if let payload = routeSelectionViewModel.routePlanPayload(chosenRouteID: route.id) {
+                            if let payload = routeSelectionViewModel.routePlanPayload(chosenRouteID: route.id, planID: planID) {
                                 Task.detached(priority: .background) {
                                     await routePlanArchiver.archive(payload)
                                 }
@@ -274,6 +277,11 @@ struct MapView: View {
             phoneConnectivity.resetHeartRate()
             activeNavigationViewModel.updateHeartRate(nil)
             phase = .tripSummary
+            if let payload = activeNavigationViewModel.lastRideRecordPayload {
+                Task.detached(priority: .background) {
+                    await rideRecordArchiver.archive(payload)
+                }
+            }
         }
     }
 
