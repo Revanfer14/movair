@@ -14,6 +14,7 @@ struct TripSummary: Identifiable, Equatable, Codable {
     let unattributedDurationMinutes: Int
     let dailyBudgetUg: Int
     let coordinates: [CLLocationCoordinate2D]
+    let travelledCoordinates: [CLLocationCoordinate2D]
     let completedAt: Date
 
     enum CodingKeys: String, CodingKey {
@@ -29,6 +30,7 @@ struct TripSummary: Identifiable, Equatable, Codable {
         case unattributedDurationMinutes
         case dailyBudgetUg
         case coordinates
+        case travelledCoordinates
         case completedAt
     }
 
@@ -50,6 +52,7 @@ struct TripSummary: Identifiable, Equatable, Codable {
         unattributedDurationMinutes: Int = 0,
         dailyBudgetUg: Int = 261,
         coordinates: [CLLocationCoordinate2D] = [],
+        travelledCoordinates: [CLLocationCoordinate2D] = [],
         completedAt: Date = Date()
     ) {
         self.id = id
@@ -64,6 +67,7 @@ struct TripSummary: Identifiable, Equatable, Codable {
         self.unattributedDurationMinutes = unattributedDurationMinutes
         self.dailyBudgetUg = dailyBudgetUg
         self.coordinates = coordinates
+        self.travelledCoordinates = travelledCoordinates
         self.completedAt = completedAt
     }
 
@@ -84,6 +88,9 @@ struct TripSummary: Identifiable, Equatable, Codable {
 
         let payloads = try container.decodeIfPresent([CoordinatePayload].self, forKey: .coordinates) ?? []
         coordinates = payloads.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
+
+        let travelledPayloads = try container.decodeIfPresent([CoordinatePayload].self, forKey: .travelledCoordinates) ?? []
+        travelledCoordinates = travelledPayloads.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
     }
 
     func encode(to encoder: Encoder) throws {
@@ -103,6 +110,17 @@ struct TripSummary: Identifiable, Equatable, Codable {
 
         let payloads = coordinates.map { CoordinatePayload(latitude: $0.latitude, longitude: $0.longitude) }
         try container.encode(payloads, forKey: .coordinates)
+
+        let travelledPayloads = travelledCoordinates.map { CoordinatePayload(latitude: $0.latitude, longitude: $0.longitude) }
+        try container.encode(travelledPayloads, forKey: .travelledCoordinates)
+    }
+
+    var displayCoordinates: [CLLocationCoordinate2D] {
+        travelledCoordinates.count >= 2 ? travelledCoordinates : coordinates
+    }
+
+    var hasActualTrace: Bool {
+        travelledCoordinates.count >= 2
     }
 
     var dailyExposurePercent: Int {

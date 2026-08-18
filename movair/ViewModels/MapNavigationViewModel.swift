@@ -63,6 +63,7 @@ final class MapNavigationViewModel: ObservableObject {
     @Published var isOffRoute: Bool = false
     @Published var unattributedDurationMinutes: Int = 0
     @Published var routeCoordinates: [CLLocationCoordinate2D] = []
+    @Published private(set) var travelledCoordinates: [CLLocationCoordinate2D] = []
     @Published var originCoordinate: CLLocationCoordinate2D?
     @Published var destinationCoordinate: CLLocationCoordinate2D?
     @Published var originTitle: String = "Current location"
@@ -119,6 +120,7 @@ final class MapNavigationViewModel: ObservableObject {
         }
         startedAt = Date()
         routeCoordinates = route.coordinates
+        travelledCoordinates = []
         isTrackingPaused = false
         distanceKm = 0
         durationMinutes = 0
@@ -246,6 +248,7 @@ final class MapNavigationViewModel: ObservableObject {
             isMeasuredExposure: true,
             unattributedDurationMinutes: unattributedDurationMinutes,
             coordinates: routeCoordinates,
+            travelledCoordinates: travelledCoordinates,
             completedAt: completedAt
         )
     }
@@ -288,6 +291,7 @@ final class MapNavigationViewModel: ObservableObject {
         durationMinutes = Int(snapshot.elapsedDuration / 60)
         unattributedDurationMinutes = Int((snapshot.unattributedDuration / 60).rounded())
         isOffRoute = snapshot.isOffRoute
+        travelledCoordinates = snapshot.travelledCoordinates
         guard snapshot.elapsedDuration > 0 else {
             averageSpeedKmh = 0
             return

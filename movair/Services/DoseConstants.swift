@@ -17,4 +17,7 @@ enum DoseConstants {
     static let maxPredictRowsPerRequest = 64
     static let maxArchivedSegments = 2000
     static let serverRequestTimeout: TimeInterval = 15
+    static let traceMinimumSpacingMeters = 15.0
+    static let traceMaximumPointCount = 3000
+    static let traceMaximumAccuracyMeters = 50.0
 }
