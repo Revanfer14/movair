@@ -403,23 +403,25 @@ struct MapViewComponent: UIViewRepresentable {
         mapView.setVisibleMapRect(rect, edgePadding: routeEdgePadding, animated: false)
     }
 
-    private func effectiveRouteKey() -> String {
-        if !routeOptions.isEmpty {
-            let ids = routeOptions.map(\.id.uuidString).joined(separator: "_")
-            return "\(ids)_\(selectedRouteID?.uuidString ?? "none")"
-        }
-        guard !routeCoordinates.isEmpty else { return "empty" }
-        let first = routeCoordinates.first!
-        let last = routeCoordinates.last!
-        let mid = routeCoordinates[routeCoordinates.count / 2]
+    private func polylineFingerprint(_ coordinates: [CLLocationCoordinate2D]) -> String {
+        guard let first = coordinates.first, let last = coordinates.last else { return "empty" }
+        let mid = coordinates[coordinates.count / 2]
         return String(
-            format: "%d_%.5f,%.5f_%.5f,%.5f_%.5f,%.5f_%d",
-            routeCoordinates.count,
+            format: "%d_%.5f,%.5f_%.5f,%.5f_%.5f,%.5f",
+            coordinates.count,
             first.latitude, first.longitude,
             mid.latitude, mid.longitude,
-            last.latitude, last.longitude,
-            plannedRouteCoordinates.count
+            last.latitude, last.longitude
         )
+    }
+
+    private func effectiveRouteKey() -> String {
+        if !routeOptions.isEmpty {
+            let routeKeys = routeOptions.map { "\($0.id.uuidString)_\(polylineFingerprint($0.coordinates))" }
+            return "\(routeKeys.joined(separator: "|"))_\(selectedRouteID?.uuidString ?? "none")"
+        }
+        guard !routeCoordinates.isEmpty else { return "empty" }
+        return "\(polylineFingerprint(routeCoordinates))_\(plannedRouteCoordinates.count)"
     }
 
     func makeCoordinator() -> Coordinator {

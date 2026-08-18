@@ -45,7 +45,10 @@ struct RouteOption: Identifiable, Equatable {
     }
 
     var distanceLabel: String {
-        String(format: "%.0f", distanceKm)
+        if distanceKm == floor(distanceKm) {
+            return String(format: "%.0f", distanceKm)
+        }
+        return String(format: "%.1f", distanceKm)
     }
 
     var durationLabel: String {
@@ -74,6 +77,25 @@ struct RouteOption: Identifiable, Equatable {
 
     static func == (lhs: RouteOption, rhs: RouteOption) -> Bool {
         lhs.id == rhs.id
+            && lhs.title == rhs.title
+            && lhs.distanceKm == rhs.distanceKm
+            && lhs.durationMinutes == rhs.durationMinutes
+            && lhs.exposureRangeUg == rhs.exposureRangeUg
+            && lhs.exposureLevel == rhs.exposureLevel
+            && lhs.pollutionDeltaPercent == rhs.pollutionDeltaPercent
+            && lhs.hasEquivalentExposure == rhs.hasEquivalentExposure
+            && lhs.isRecommended == rhs.isRecommended
+            && lhs.isLonger == rhs.isLonger
+            && lhs.steps.count == rhs.steps.count
+            && coordinatesAreEqual(lhs.coordinates, rhs.coordinates)
+    }
+
+    private static func coordinatesAreEqual(_ lhs: [CLLocationCoordinate2D], _ rhs: [CLLocationCoordinate2D]) -> Bool {
+        guard lhs.count == rhs.count else { return false }
+        for (left, right) in zip(lhs, rhs) where left.latitude != right.latitude || left.longitude != right.longitude {
+            return false
+        }
+        return true
     }
 }
 
