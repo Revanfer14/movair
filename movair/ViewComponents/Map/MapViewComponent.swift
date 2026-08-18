@@ -8,6 +8,12 @@ final class RoutePolyline: MKPolyline, @unchecked Sendable {
 
 final class DottedConnectorPolyline: MKPolyline, @unchecked Sendable {}
 
+final class PlannedRoutePolyline: MKPolyline, @unchecked Sendable {}
+
+final class TracePolyline: MKPolyline, @unchecked Sendable {
+    var isMeasured: Bool = true
+}
+
 final class RouteStartAnnotation: NSObject, MKAnnotation {
     let coordinate: CLLocationCoordinate2D
     var title: String? = "Start of Route"
@@ -19,7 +25,9 @@ final class RouteStartAnnotation: NSObject, MKAnnotation {
 
 final class UserLocationAnnotationView: MKAnnotationView {
     private let arrowImageView = UIImageView()
+    private let headingUnavailableDot = UIView()
     private let circleBackground = UIView()
+    private var appliedRotationDegrees: Double = 0
 
     override init(annotation: MKAnnotation?, reuseIdentifier: String?) {
         super.init(annotation: annotation, reuseIdentifier: reuseIdentifier)
@@ -54,11 +62,30 @@ final class UserLocationAnnotationView: MKAnnotationView {
         arrowImageView.image = UIImage(systemName: "location.north.fill", withConfiguration: config)
         arrowImageView.tintColor = UIColor(Color.Brand.blue600)
         circleBackground.addSubview(arrowImageView)
+
+        headingUnavailableDot.frame = CGRect(x: 15, y: 15, width: 14, height: 14)
+        headingUnavailableDot.backgroundColor = UIColor(Color.Brand.blue600)
+        headingUnavailableDot.layer.cornerRadius = 7
+        headingUnavailableDot.isHidden = true
+        circleBackground.addSubview(headingUnavailableDot)
     }
 
-    func updateHeading(deviceHeading: Double, cameraHeading: Double) {
+    func apply(deviceHeading: Double?, cameraHeading: Double) {
+        guard let deviceHeading else {
+            arrowImageView.isHidden = true
+            headingUnavailableDot.isHidden = false
+            return
+        }
+
+        arrowImageView.isHidden = false
+        headingUnavailableDot.isHidden = true
+
         let relativeAngle = deviceHeading - cameraHeading
-        let radians = relativeAngle * .pi / 180.0
+        let delta = MapViewComponent.shortestAngleDifference(from: appliedRotationDegrees, to: relativeAngle)
+        guard abs(delta) >= 0.5 else { return }
+
+        appliedRotationDegrees += delta
+        let radians = appliedRotationDegrees * .pi / 180.0
         UIView.animate(withDuration: 0.2, delay: 0, options: [.beginFromCurrentState, .curveEaseOut]) {
             self.arrowImageView.transform = CGAffineTransform(rotationAngle: CGFloat(radians))
         }
@@ -71,6 +98,9 @@ struct MapViewComponent: UIViewRepresentable {
     var centerCoordinate: CLLocationCoordinate2D?
     var showsUserLocation: Bool = true
     var routeCoordinates: [CLLocationCoordinate2D] = []
+    var plannedRouteCoordinates: [CLLocationCoordinate2D] = []
+    var isTraceMeasured: Bool = true
+    var breaksTraceAtGaps: Bool = false
     var originCoordinate: CLLocationCoordinate2D?
     var destinationCoordinate: CLLocationCoordinate2D?
     var fitsRouteInView: Bool = false
@@ -120,23 +150,12 @@ struct MapViewComponent: UIViewRepresentable {
         mapView.isRotateEnabled = isInteractionEnabled
         context.coordinator.parent = self
 
-        updateOverlays(on: mapView)
+        updateOverlays(on: mapView, context: context)
         updateAnnotations(on: mapView)
 
-        if let userView = mapView.view(for: mapView.userLocation) as? UserLocationAnnotationView {
-            let deviceHeading: Double = {
-                if let heading = userHeading {
-                    let deg = heading.trueHeading >= 0 ? heading.trueHeading : heading.magneticHeading
-                    if deg >= 0 { return deg }
-                }
-                return routeHeading ?? 0
-            }()
-            let cameraHeading = mapView.camera.heading
-            userView.updateHeading(deviceHeading: deviceHeading, cameraHeading: cameraHeading)
-        }
-
         if isNavigationTracking {
-            updateNavigationCamera(on: mapView, context: context)
+            let cameraHeading = updateNavigationCamera(on: mapView, context: context)
+            refreshUserLocationArrow(on: mapView, cameraHeading: cameraHeading)
             return
         }
 
@@ -167,21 +186,14 @@ struct MapViewComponent: UIViewRepresentable {
             }
             DispatchQueue.main.async { recenterTrigger = false }
         }
+
+        refreshUserLocationArrow(on: mapView, cameraHeading: mapView.camera.heading)
     }
 
-    private func updateNavigationCamera(on mapView: MKMapView, context: Context) {
-        guard let centerCoordinate else { return }
+    private func updateNavigationCamera(on mapView: MKMapView, context: Context) -> Double {
+        guard let centerCoordinate else { return mapView.camera.heading }
 
-        let targetHeading: Double = {
-            if let heading = userHeading {
-                let deg = heading.trueHeading >= 0 ? heading.trueHeading : heading.magneticHeading
-                if deg >= 0 { return deg }
-            }
-            if let routeHeading {
-                return routeHeading
-            }
-            return mapView.camera.heading
-        }()
+        let targetHeading = resolvedDeviceHeading() ?? routeHeading ?? mapView.camera.heading
 
         var targetAltitude = navigationAltitude
         if let firstCoord = routeCoordinates.first {
@@ -211,7 +223,7 @@ struct MapViewComponent: UIViewRepresentable {
             if recenterTrigger {
                 DispatchQueue.main.async { recenterTrigger = false }
             }
-            return
+            return targetHeading
         }
 
         if !context.coordinator.userHasDraggedMap {
@@ -236,17 +248,41 @@ struct MapViewComponent: UIViewRepresentable {
                 mapView.setCamera(camera, animated: true)
                 context.coordinator.lastAppliedHeading = targetHeading
                 context.coordinator.lastAppliedCenter = centerCoordinate
+                return targetHeading
             }
         }
+
+        return mapView.camera.heading
     }
 
-    private static func shortestAngleDifference(from: Double, to: Double) -> Double {
+    fileprivate static func shortestAngleDifference(from: Double, to: Double) -> Double {
         let diff = (to - from + 540).truncatingRemainder(dividingBy: 360) - 180
         return diff
     }
 
-    private func updateOverlays(on mapView: MKMapView) {
-        mapView.removeOverlays(mapView.overlays)
+    private func resolvedDeviceHeading() -> Double? {
+        guard let userHeading else { return nil }
+        if userHeading.trueHeading >= 0 { return userHeading.trueHeading }
+        if userHeading.magneticHeading >= 0 { return userHeading.magneticHeading }
+        return nil
+    }
+
+    private func refreshUserLocationArrow(on mapView: MKMapView, cameraHeading: Double) {
+        guard let userView = mapView.view(for: mapView.userLocation) as? UserLocationAnnotationView else { return }
+        userView.apply(deviceHeading: resolvedDeviceHeading(), cameraHeading: cameraHeading)
+    }
+
+    private func updateOverlays(on mapView: MKMapView, context: Context) {
+        let routeKey = routeOverlayKey()
+        if routeKey != context.coordinator.lastRouteOverlayKey {
+            let routeOverlays = mapView.overlays.filter { !($0 is DottedConnectorPolyline) }
+            mapView.removeOverlays(routeOverlays)
+            addRouteOverlays(on: mapView)
+            context.coordinator.lastRouteOverlayKey = routeKey
+        }
+
+        let connectorOverlays = mapView.overlays.filter { $0 is DottedConnectorPolyline }
+        mapView.removeOverlays(connectorOverlays)
 
         if isNavigationTracking, let userCoord = centerCoordinate, let firstRouteCoord = routeCoordinates.first {
             let userLoc = CLLocation(latitude: userCoord.latitude, longitude: userCoord.longitude)
@@ -258,7 +294,9 @@ struct MapViewComponent: UIViewRepresentable {
                 mapView.addOverlay(connector)
             }
         }
+    }
 
+    private func addRouteOverlays(on mapView: MKMapView) {
         if !routeOptions.isEmpty {
             let unselectedRoutes = routeOptions.filter { $0.id != selectedRouteID }
             for route in unselectedRoutes {
@@ -276,9 +314,41 @@ struct MapViewComponent: UIViewRepresentable {
                 mapView.addOverlay(polyline)
             }
         } else if routeCoordinates.count >= 2 {
-            let polyline = MKPolyline(coordinates: routeCoordinates, count: routeCoordinates.count)
-            mapView.addOverlay(polyline)
+            if plannedRouteCoordinates.count >= 2 {
+                let planned = PlannedRoutePolyline(coordinates: plannedRouteCoordinates, count: plannedRouteCoordinates.count)
+                mapView.addOverlay(planned)
+            }
+
+            let runs = breaksTraceAtGaps ? Self.splitAtGaps(routeCoordinates) : [routeCoordinates]
+            for run in runs where run.count >= 2 {
+                let polyline = TracePolyline(coordinates: run, count: run.count)
+                polyline.isMeasured = isTraceMeasured
+                mapView.addOverlay(polyline)
+            }
         }
+    }
+
+    private static func splitAtGaps(_ coordinates: [CLLocationCoordinate2D]) -> [[CLLocationCoordinate2D]] {
+        guard coordinates.count >= 2 else { return [coordinates] }
+        var runs: [[CLLocationCoordinate2D]] = []
+        var currentRun: [CLLocationCoordinate2D] = [coordinates[0]]
+
+        for index in 1..<coordinates.count {
+            let previous = CLLocation(latitude: coordinates[index - 1].latitude, longitude: coordinates[index - 1].longitude)
+            let current = CLLocation(latitude: coordinates[index].latitude, longitude: coordinates[index].longitude)
+            if previous.distance(from: current) > DoseConstants.traceBreakDistanceMeters {
+                runs.append(currentRun)
+                currentRun = [coordinates[index]]
+            } else {
+                currentRun.append(coordinates[index])
+            }
+        }
+        runs.append(currentRun)
+        return runs
+    }
+
+    private func routeOverlayKey() -> String {
+        "\(effectiveRouteKey())_\(isNavigationTracking)_\(plannedRouteCoordinates.count)_\(isTraceMeasured)_\(breaksTraceAtGaps)"
     }
 
     private func updateAnnotations(on mapView: MKMapView) {
@@ -335,6 +405,11 @@ struct MapViewComponent: UIViewRepresentable {
             }
         }
 
+        for coordinate in plannedRouteCoordinates {
+            let point = MKMapPoint(coordinate)
+            rect = rect.union(MKMapRect(x: point.x, y: point.y, width: 0.1, height: 0.1))
+        }
+
         if let originCoordinate {
             let point = MKMapPoint(originCoordinate)
             rect = rect.union(MKMapRect(x: point.x, y: point.y, width: 0.1, height: 0.1))
@@ -357,11 +432,12 @@ struct MapViewComponent: UIViewRepresentable {
         let last = routeCoordinates.last!
         let mid = routeCoordinates[routeCoordinates.count / 2]
         return String(
-            format: "%d_%.5f,%.5f_%.5f,%.5f_%.5f,%.5f",
+            format: "%d_%.5f,%.5f_%.5f,%.5f_%.5f,%.5f_%d",
             routeCoordinates.count,
             first.latitude, first.longitude,
             mid.latitude, mid.longitude,
-            last.latitude, last.longitude
+            last.latitude, last.longitude,
+            plannedRouteCoordinates.count
         )
     }
 
@@ -374,6 +450,7 @@ struct MapViewComponent: UIViewRepresentable {
         var hasCenteredOnce = false
         var hasCenteredNavigation = false
         var lastFittedRouteKey: String = ""
+        var lastRouteOverlayKey: String = ""
         var userHasDraggedMap = false
         var lastAppliedHeading: Double = 0
         var lastAppliedCenter: CLLocationCoordinate2D?
@@ -454,6 +531,10 @@ struct MapViewComponent: UIViewRepresentable {
             }
         }
 
+        func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
+            parent.refreshUserLocationArrow(on: mapView, cameraHeading: mapView.camera.heading)
+        }
+
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
             if overlay is DottedConnectorPolyline {
                 let renderer = MKPolylineRenderer(overlay: overlay)
@@ -478,6 +559,31 @@ struct MapViewComponent: UIViewRepresentable {
                 return renderer
             }
 
+            if let planned = overlay as? PlannedRoutePolyline {
+                let renderer = MKPolylineRenderer(polyline: planned)
+                renderer.strokeColor = UIColor(Color.Brand.blue600.opacity(0.30))
+                renderer.lineWidth = 4.5
+                renderer.lineDashPattern = [2, 8]
+                renderer.lineCap = .round
+                renderer.lineJoin = .round
+                return renderer
+            }
+
+            if let trace = overlay as? TracePolyline {
+                let renderer = MKPolylineRenderer(polyline: trace)
+                if trace.isMeasured {
+                    renderer.strokeColor = UIColor(Color.Brand.blue600)
+                    renderer.lineWidth = 5.5
+                } else {
+                    renderer.strokeColor = UIColor(Color.Brand.blue600.opacity(0.45))
+                    renderer.lineWidth = 5.5
+                    renderer.lineDashPattern = [1, 10]
+                }
+                renderer.lineCap = .round
+                renderer.lineJoin = .round
+                return renderer
+            }
+
             if let polyline = overlay as? MKPolyline {
                 let renderer = MKPolylineRenderer(polyline: polyline)
                 renderer.strokeColor = UIColor(Color.Brand.blue600)
@@ -495,9 +601,7 @@ struct MapViewComponent: UIViewRepresentable {
                 let userView = mapView.dequeueReusableAnnotationView(withIdentifier: id) as? UserLocationAnnotationView
                     ?? UserLocationAnnotationView(annotation: annotation, reuseIdentifier: id)
                 userView.annotation = annotation
-                let deviceHeading = parent.userHeading?.trueHeading ?? parent.userHeading?.magneticHeading ?? parent.routeHeading ?? 0
-                let cameraHeading = mapView.camera.heading
-                userView.updateHeading(deviceHeading: deviceHeading, cameraHeading: cameraHeading)
+                userView.apply(deviceHeading: parent.resolvedDeviceHeading(), cameraHeading: mapView.camera.heading)
                 return userView
             }
 

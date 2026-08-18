@@ -23,6 +23,12 @@ final class RideTracker {
         interpolatedSegmentFlags = Array(repeating: false, count: segments.count)
     }
 
+    func pause() {
+        lastUpdateUptime = nil
+        lastLocation = nil
+        lastTraceLocation = nil
+    }
+
     func process(location: CLLocation) -> RideTrackingSnapshot {
         let uptime = ProcessInfo.processInfo.systemUptime
         let delta = consumeElapsedDuration(at: uptime)
@@ -30,17 +36,10 @@ final class RideTracker {
         recordTrace(with: location)
 
         guard let match = closestMatch(to: location.coordinate) else {
-            attributeToActiveSegment(elapsed: delta)
             return snapshot()
         }
 
-        if match.distanceToRouteMeters > DoseConstants.offRouteDistanceMeters {
-            isOffRoute = true
-            attributeToActiveSegment(elapsed: delta, fallbackRouteDistance: match.routeDistanceMeters)
-            return snapshot()
-        }
-
-        isOffRoute = false
+        isOffRoute = match.distanceToRouteMeters > DoseConstants.offRouteDistanceMeters
         let matchedIndex = segmentIndex(for: match.routeDistanceMeters)
         accumulate(elapsed: delta, toward: matchedIndex, routeDistanceMeters: match.routeDistanceMeters)
         return snapshot()
@@ -68,11 +67,24 @@ final class RideTracker {
     }
 
     private func updateTravelledDistance(with location: CLLocation) {
-        defer { lastLocation = location }
-        guard let lastLocation, location.horizontalAccuracy >= 0 else { return }
+        guard location.horizontalAccuracy >= 0,
+              location.horizontalAccuracy <= DoseConstants.traceMaximumAccuracyMeters else { return }
+
+        guard let lastLocation else {
+            lastLocation = location
+            return
+        }
+
         let distance = location.distance(from: lastLocation)
-        guard distance <= 100 else { return }
+        guard distance >= DoseConstants.minimumMovementMeters else { return }
+
+        guard distance <= 100 else {
+            self.lastLocation = location
+            return
+        }
+
         travelledDistanceMeters += distance
+        self.lastLocation = location
     }
 
     private func recordTrace(with location: CLLocation) {
@@ -106,22 +118,6 @@ final class RideTracker {
         }
         travelledCoordinates = decimated
         traceSpacingMeters *= 2
-    }
-
-    private func attributeToActiveSegment(elapsed: TimeInterval, fallbackRouteDistance: Double? = nil) {
-        guard !segments.isEmpty else { return }
-        if let activeSegmentIndex {
-            segmentDurations[activeSegmentIndex] += elapsed
-        } else {
-            let initialIndex: Int
-            if let fallbackRouteDistance {
-                initialIndex = segmentIndex(for: fallbackRouteDistance)
-            } else {
-                initialIndex = 0
-            }
-            activeSegmentIndex = initialIndex
-            segmentDurations[initialIndex] += elapsed
-        }
     }
 
     private func accumulate(
@@ -181,40 +177,28 @@ final class RideTracker {
     private func closestMatch(to coordinate: CLLocationCoordinate2D) -> RouteMatch? {
         guard !segments.isEmpty else { return nil }
 
-        if let activeSegmentIndex {
-            let localStart = max(0, activeSegmentIndex - 2)
-            let localEnd = min(segments.count - 1, activeSegmentIndex + 5)
-            let localMatches = (localStart...localEnd).compactMap { index -> RouteMatch? in
-                let segment = segments[index]
-                let projection = projection(of: coordinate, onto: segment)
-                return RouteMatch(
-                    routeDistanceMeters: segment.startDistanceMeters + segment.distanceMeters * projection.fraction,
-                    distanceToRouteMeters: projection.distanceMeters,
-                    segmentIndex: index
-                )
-            }
-            if let bestLocal = localMatches.min(by: { $0.distanceToRouteMeters < $1.distanceToRouteMeters }),
-               bestLocal.distanceToRouteMeters <= DoseConstants.offRouteDistanceMeters {
-                return bestLocal
-            }
-        } else {
-            let initialEnd = min(segments.count - 1, 4)
-            let initialMatches = (0...initialEnd).compactMap { index -> RouteMatch? in
-                let segment = segments[index]
-                let projection = projection(of: coordinate, onto: segment)
-                return RouteMatch(
-                    routeDistanceMeters: segment.startDistanceMeters + segment.distanceMeters * projection.fraction,
-                    distanceToRouteMeters: projection.distanceMeters,
-                    segmentIndex: index
-                )
-            }
-            if let bestInitial = initialMatches.min(by: { $0.distanceToRouteMeters < $1.distanceToRouteMeters }),
-               bestInitial.distanceToRouteMeters <= DoseConstants.offRouteDistanceMeters {
-                return bestInitial
-            }
+        guard let activeSegmentIndex else {
+            return bestMatch(in: 0...(segments.count - 1), near: coordinate)
         }
 
-        return segments.enumerated().compactMap { index, segment in
+        var radius = DoseConstants.localMatchInitialRadiusSegments
+        while true {
+            let start = max(0, activeSegmentIndex - radius)
+            let end = min(segments.count - 1, activeSegmentIndex + radius)
+            let coversWholeRoute = start == 0 && end == segments.count - 1
+
+            guard let candidate = bestMatch(in: start...end, near: coordinate) else { return nil }
+
+            if coversWholeRoute || candidate.distanceToRouteMeters <= DoseConstants.localMatchWindowMeters {
+                return candidate
+            }
+            radius *= 4
+        }
+    }
+
+    private func bestMatch(in range: ClosedRange<Int>, near coordinate: CLLocationCoordinate2D) -> RouteMatch? {
+        range.compactMap { index -> RouteMatch? in
+            let segment = segments[index]
             let projection = projection(of: coordinate, onto: segment)
             return RouteMatch(
                 routeDistanceMeters: segment.startDistanceMeters + segment.distanceMeters * projection.fraction,

@@ -178,7 +178,8 @@ struct MapView: View {
             MapViewComponent(
                 recenterTrigger: $recenterTrigger,
                 centerCoordinate: locationManager.userLocation,
-                showsUserLocation: true
+                showsUserLocation: true,
+                userHeading: locationManager.userHeading
             )
             .ignoresSafeArea()
 
@@ -265,13 +266,15 @@ struct MapView: View {
     }
 
     private func finishRide() {
-        let trip = activeNavigationViewModel.makeTripSummary(completedAt: Date())
-        tripStore.add(trip)
-        completedTrip = trip
         locationManager.stopRideTracking()
-        phoneConnectivity.resetHeartRate()
-        activeNavigationViewModel.updateHeartRate(nil)
-        phase = .tripSummary
+        Task {
+            let trip = await activeNavigationViewModel.finishRide(completedAt: Date())
+            tripStore.add(trip)
+            completedTrip = trip
+            phoneConnectivity.resetHeartRate()
+            activeNavigationViewModel.updateHeartRate(nil)
+            phase = .tripSummary
+        }
     }
 
     private func pushStateToWatch() {

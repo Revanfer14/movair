@@ -142,13 +142,6 @@ struct TripSummaryView: View {
                     .font(Font.Brand.footnote)
                     .foregroundStyle(Color.Brand.darkgray)
                     .fixedSize(horizontal: false, vertical: true)
-
-                if let unattributedDurationLabel = trip.unattributedDurationLabel {
-                    Text(unattributedDurationLabel)
-                        .font(Font.Brand.footnote)
-                        .foregroundStyle(Color.Brand.primaryOrange)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.trailing, 12)
@@ -180,6 +173,20 @@ struct TripSummaryView: View {
         .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 4)
     }
 
+    private var originMarkerCoordinate: CLLocationCoordinate2D? {
+        trip.originCoordinate ?? trip.displayCoordinates.first
+    }
+
+    private var destinationMarkerCoordinate: CLLocationCoordinate2D? {
+        trip.destinationCoordinate ?? trip.displayCoordinates.last
+    }
+
+    private var traceCaption: String {
+        trip.hasActualTrace
+            ? "Rute jejak GPS selama gowes"
+            : "Rencana rute — jejak GPS belum tersedia"
+    }
+
     private var exposureValueColor: Color {
         switch trip.exposureLevel {
         case .low: return Color.Brand.primaryGreen
@@ -209,8 +216,11 @@ struct TripSummaryView: View {
                 centerCoordinate: trip.displayCoordinates.first,
                 showsUserLocation: false,
                 routeCoordinates: trip.displayCoordinates,
-                originCoordinate: trip.displayCoordinates.first,
-                destinationCoordinate: trip.displayCoordinates.last,
+                plannedRouteCoordinates: trip.hasActualTrace ? trip.coordinates : [],
+                isTraceMeasured: trip.hasActualTrace,
+                breaksTraceAtGaps: true,
+                originCoordinate: originMarkerCoordinate,
+                destinationCoordinate: destinationMarkerCoordinate,
                 fitsRouteInView: true,
                 routeEdgePadding: UIEdgeInsets(top: 24, left: 24, bottom: 24, right: 24),
                 showsOriginMarker: true
@@ -222,6 +232,11 @@ struct TripSummaryView: View {
                 Text(trip.routeTitle)
                     .font(Font.Brand.bodyBold)
                     .foregroundStyle(Color.primary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(traceCaption)
+                    .font(Font.Brand.footnote)
+                    .foregroundStyle(Color.Brand.darkgray)
                     .fixedSize(horizontal: false, vertical: true)
 
                 MapRouteMetricRow(items: [

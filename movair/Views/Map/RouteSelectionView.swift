@@ -54,6 +54,7 @@ struct RouteSelectionView: View {
                         right: 36
                     ),
                     showsOriginMarker: true,
+                    userHeading: locationManager.userHeading,
                     routeOptions: viewModel.routes,
                     selectedRouteID: viewModel.selectedRouteID,
                     onSelectRouteID: { id in

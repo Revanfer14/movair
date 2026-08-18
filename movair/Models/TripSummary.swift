@@ -7,6 +7,7 @@ struct TripSummary: Identifiable, Equatable, Codable {
     let destinationTitle: String
     let distanceKm: Double
     let durationMinutes: Int
+    let durationSeconds: TimeInterval
     let averageSpeedKmh: Double
     let exposureUg: Int
     let exposureLevel: ExposureLevel
@@ -15,6 +16,10 @@ struct TripSummary: Identifiable, Equatable, Codable {
     let dailyBudgetUg: Int
     let coordinates: [CLLocationCoordinate2D]
     let travelledCoordinates: [CLLocationCoordinate2D]
+    let originCoordinate: CLLocationCoordinate2D?
+    let destinationCoordinate: CLLocationCoordinate2D?
+    let segmentConcentrations: [Double]
+    let segmentDurationsSeconds: [TimeInterval]
     let completedAt: Date
 
     enum CodingKeys: String, CodingKey {
@@ -23,6 +28,7 @@ struct TripSummary: Identifiable, Equatable, Codable {
         case destinationTitle
         case distanceKm
         case durationMinutes
+        case durationSeconds
         case averageSpeedKmh
         case exposureUg
         case exposureLevel
@@ -31,6 +37,10 @@ struct TripSummary: Identifiable, Equatable, Codable {
         case dailyBudgetUg
         case coordinates
         case travelledCoordinates
+        case originCoordinate
+        case destinationCoordinate
+        case segmentConcentrations
+        case segmentDurationsSeconds
         case completedAt
     }
 
@@ -45,6 +55,7 @@ struct TripSummary: Identifiable, Equatable, Codable {
         destinationTitle: String,
         distanceKm: Double,
         durationMinutes: Int,
+        durationSeconds: TimeInterval? = nil,
         averageSpeedKmh: Double,
         exposureUg: Int,
         exposureLevel: ExposureLevel,
@@ -53,6 +64,10 @@ struct TripSummary: Identifiable, Equatable, Codable {
         dailyBudgetUg: Int = 261,
         coordinates: [CLLocationCoordinate2D] = [],
         travelledCoordinates: [CLLocationCoordinate2D] = [],
+        originCoordinate: CLLocationCoordinate2D? = nil,
+        destinationCoordinate: CLLocationCoordinate2D? = nil,
+        segmentConcentrations: [Double] = [],
+        segmentDurationsSeconds: [TimeInterval] = [],
         completedAt: Date = Date()
     ) {
         self.id = id
@@ -60,6 +75,7 @@ struct TripSummary: Identifiable, Equatable, Codable {
         self.destinationTitle = destinationTitle
         self.distanceKm = distanceKm
         self.durationMinutes = durationMinutes
+        self.durationSeconds = durationSeconds ?? Double(durationMinutes) * 60
         self.averageSpeedKmh = averageSpeedKmh
         self.exposureUg = exposureUg
         self.exposureLevel = exposureLevel
@@ -68,6 +84,10 @@ struct TripSummary: Identifiable, Equatable, Codable {
         self.dailyBudgetUg = dailyBudgetUg
         self.coordinates = coordinates
         self.travelledCoordinates = travelledCoordinates
+        self.originCoordinate = originCoordinate
+        self.destinationCoordinate = destinationCoordinate
+        self.segmentConcentrations = segmentConcentrations
+        self.segmentDurationsSeconds = segmentDurationsSeconds
         self.completedAt = completedAt
     }
 
@@ -78,6 +98,8 @@ struct TripSummary: Identifiable, Equatable, Codable {
         destinationTitle = try container.decode(String.self, forKey: .destinationTitle)
         distanceKm = try container.decode(Double.self, forKey: .distanceKm)
         durationMinutes = try container.decode(Int.self, forKey: .durationMinutes)
+        durationSeconds = try container.decodeIfPresent(TimeInterval.self, forKey: .durationSeconds)
+            ?? Double(durationMinutes) * 60
         averageSpeedKmh = try container.decode(Double.self, forKey: .averageSpeedKmh)
         exposureUg = try container.decode(Int.self, forKey: .exposureUg)
         exposureLevel = try container.decode(ExposureLevel.self, forKey: .exposureLevel)
@@ -91,6 +113,21 @@ struct TripSummary: Identifiable, Equatable, Codable {
 
         let travelledPayloads = try container.decodeIfPresent([CoordinatePayload].self, forKey: .travelledCoordinates) ?? []
         travelledCoordinates = travelledPayloads.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
+
+        if let originPayload = try container.decodeIfPresent(CoordinatePayload.self, forKey: .originCoordinate) {
+            originCoordinate = CLLocationCoordinate2D(latitude: originPayload.latitude, longitude: originPayload.longitude)
+        } else {
+            originCoordinate = nil
+        }
+
+        if let destinationPayload = try container.decodeIfPresent(CoordinatePayload.self, forKey: .destinationCoordinate) {
+            destinationCoordinate = CLLocationCoordinate2D(latitude: destinationPayload.latitude, longitude: destinationPayload.longitude)
+        } else {
+            destinationCoordinate = nil
+        }
+
+        segmentConcentrations = try container.decodeIfPresent([Double].self, forKey: .segmentConcentrations) ?? []
+        segmentDurationsSeconds = try container.decodeIfPresent([TimeInterval].self, forKey: .segmentDurationsSeconds) ?? []
     }
 
     func encode(to encoder: Encoder) throws {
@@ -100,6 +137,7 @@ struct TripSummary: Identifiable, Equatable, Codable {
         try container.encode(destinationTitle, forKey: .destinationTitle)
         try container.encode(distanceKm, forKey: .distanceKm)
         try container.encode(durationMinutes, forKey: .durationMinutes)
+        try container.encode(durationSeconds, forKey: .durationSeconds)
         try container.encode(averageSpeedKmh, forKey: .averageSpeedKmh)
         try container.encode(exposureUg, forKey: .exposureUg)
         try container.encode(exposureLevel, forKey: .exposureLevel)
@@ -113,6 +151,18 @@ struct TripSummary: Identifiable, Equatable, Codable {
 
         let travelledPayloads = travelledCoordinates.map { CoordinatePayload(latitude: $0.latitude, longitude: $0.longitude) }
         try container.encode(travelledPayloads, forKey: .travelledCoordinates)
+
+        try container.encodeIfPresent(
+            originCoordinate.map { CoordinatePayload(latitude: $0.latitude, longitude: $0.longitude) },
+            forKey: .originCoordinate
+        )
+        try container.encodeIfPresent(
+            destinationCoordinate.map { CoordinatePayload(latitude: $0.latitude, longitude: $0.longitude) },
+            forKey: .destinationCoordinate
+        )
+
+        try container.encode(segmentConcentrations, forKey: .segmentConcentrations)
+        try container.encode(segmentDurationsSeconds, forKey: .segmentDurationsSeconds)
     }
 
     var displayCoordinates: [CLLocationCoordinate2D] {
@@ -140,8 +190,9 @@ struct TripSummary: Identifiable, Equatable, Codable {
     }
 
     var durationLabel: String {
-        let hours = durationMinutes / 60
-        let minutes = durationMinutes % 60
+        let totalMinutes = Int((durationSeconds / 60).rounded())
+        let hours = totalMinutes / 60
+        let minutes = totalMinutes % 60
         if hours > 0 {
             return "\(hours)h \(String(format: "%02d", minutes))m"
         }
@@ -173,11 +224,6 @@ struct TripSummary: Identifiable, Equatable, Codable {
         let dayFormatter = DateFormatter()
         dayFormatter.dateFormat = "MMM d"
         return "\(dayFormatter.string(from: completedAt)) at \(time)"
-    }
-
-    var unattributedDurationLabel: String? {
-        guard unattributedDurationMinutes > 0 else { return nil }
-        return "\(unattributedDurationMinutes) min off route — not included in dose"
     }
 
     static func == (lhs: TripSummary, rhs: TripSummary) -> Bool {

@@ -1,3 +1,4 @@
+import CoreLocation
 import Foundation
 
 protocol RouteExposureEstimating: Sendable {
@@ -8,18 +9,20 @@ actor RouteExposureEstimator: RouteExposureEstimating {
     private let segmenter: RouteSegmenting
     private let weatherService: OpenMeteoProviding
     private let predictor: PMPredicting
+    private let fetchGrouper: SegmentFetchGrouping
     private var roadDataStore: RoadDataProviding?
 
     init(
         segmenter: RouteSegmenting = RouteSegmenter(),
         weatherService: OpenMeteoProviding = OpenMeteoService(),
         predictor: PMPredicting? = nil,
+        fetchGrouper: SegmentFetchGrouping = SegmentFetchGrouper(),
         roadDataStore: RoadDataProviding? = nil
     ) throws {
         self.segmenter = segmenter
         self.weatherService = weatherService
-        // self.predictor = try predictor ?? PMPredictor()
         self.predictor = predictor ?? RemotePMPredictor()
+        self.fetchGrouper = fetchGrouper
         self.roadDataStore = roadDataStore
     }
 
@@ -32,27 +35,16 @@ actor RouteExposureEstimator: RouteExposureEstimating {
             return (route, segments)
         }
 
-        let cells = Set(routeSegments.flatMap { $0.1.map { CAMSCell(coordinate: $0.midpoint) } })
-        guard cells.count <= DoseConstants.maxCAMSCellsPerRequest else {
+        let perRouteGroups = routeSegments.map { fetchGrouper.makeGroups(from: $0.1) }
+        let merge = mergeGroupsAcrossRoutes(perRouteGroups)
+        guard merge.references.count <= DoseConstants.maxFetchGroupsPerRequest else {
             throw ExposureEstimationError.routeOutsideValidatedCoverage
         }
 
-        let orderedCells = cells.sorted { lhs, rhs in
-            lhs.latitudeIndex == rhs.latitudeIndex
-                ? lhs.longitudeIndex < rhs.longitudeIndex
-                : lhs.latitudeIndex < rhs.latitudeIndex
-        }
-        let fetchGroupIndexByCell = Dictionary(uniqueKeysWithValues: orderedCells.enumerated().map { ($1, $0) })
-
-        var snapshotsByCell: [CAMSCell: WeatherSnapshot] = [:]
-        for cell in orderedCells {
-            snapshotsByCell[cell] = try await weatherService.weather(at: cell.centroid, date: date)
-        }
-
-        // let snapshots = orderedCells.map { snapshotsByCell[$0]! }
-        let snapshots = orderedCells.compactMap { snapshotsByCell[$0] }
-        guard snapshots.count == orderedCells.count else {
-            throw ExposureEstimationError.unavailableData
+        var snapshots: [WeatherSnapshot] = []
+        snapshots.reserveCapacity(merge.references.count)
+        for reference in merge.references {
+            snapshots.append(try await weatherService.weather(at: reference, date: date))
         }
 
         let cBaseValues: [Double]
@@ -61,24 +53,28 @@ actor RouteExposureEstimator: RouteExposureEstimating {
         } catch {
             throw ExposureEstimationError.modelPredictionFailed
         }
-        guard cBaseValues.count == orderedCells.count else {
+        guard cBaseValues.count == merge.references.count else {
             throw ExposureEstimationError.modelPredictionFailed
-        }
-        let cBaseByCell = Dictionary(uniqueKeysWithValues: zip(orderedCells, cBaseValues))
-
-        var segmentCountByCell: [CAMSCell: Int] = [:]
-        for (_, segments) in routeSegments {
-            for segment in segments {
-                let cell = CAMSCell(coordinate: segment.midpoint)
-                segmentCountByCell[cell, default: 0] += 1
-            }
         }
 
         let roadDataStore = try resolvedRoadDataStore()
-        let routeEstimates = try routeSegments.map { route, segments -> RouteExposureEstimate in
+        let routeEstimates = try routeSegments.indices.map { routeIndex -> RouteExposureEstimate in
+            let (route, segments) = routeSegments[routeIndex]
+            let groups = perRouteGroups[routeIndex]
+            let mergedIndicesForGroups = merge.mergedIndicesByRoute[routeIndex]
             let totalSegmentDistance = segments.reduce(0) { $0 + $1.distanceMeters }
             guard totalSegmentDistance > 0 else {
                 throw ExposureEstimationError.invalidRoute
+            }
+
+            var basePM25BySegmentIndex = Array(repeating: 0.0, count: segments.count)
+            var fetchGroupIndexBySegmentIndex = Array(repeating: 0, count: segments.count)
+            for (groupOffset, group) in groups.enumerated() {
+                let mergedIndex = mergedIndicesForGroups[groupOffset]
+                for segmentIndex in group.segmentIndices {
+                    basePM25BySegmentIndex[segmentIndex] = cBaseValues[mergedIndex]
+                    fetchGroupIndexBySegmentIndex[segmentIndex] = mergedIndex
+                }
             }
 
             var segmentExposures: [SegmentExposure] = []
@@ -86,10 +82,7 @@ actor RouteExposureEstimator: RouteExposureEstimating {
             var exposure = 0.0
 
             for (index, segment) in segments.enumerated() {
-                let cell = CAMSCell(coordinate: segment.midpoint)
-                guard let cBase = cBaseByCell[cell] else {
-                    throw ExposureEstimationError.unavailableData
-                }
+                let cBase = basePM25BySegmentIndex[index]
                 let attributes = try roadDataStore.attributes(for: segment.midpoint)
                 let roadMultiplier = DoseCalculator.roadMultiplier(for: attributes.roadClass)
                 let greenMultiplier = DoseCalculator.greenMultiplier(for: attributes.greeneryIndex)
@@ -120,7 +113,7 @@ actor RouteExposureEstimator: RouteExposureEstimating {
                         concentration: concentration,
                         durationSeconds: minutes * 60,
                         concentrationTimesDuration: concentrationTimesDuration,
-                        fetchGroupIndex: fetchGroupIndexByCell[cell] ?? 0
+                        fetchGroupIndex: fetchGroupIndexBySegmentIndex[index]
                     )
                 )
             }
@@ -135,13 +128,13 @@ actor RouteExposureEstimator: RouteExposureEstimating {
             )
         }
 
-        let fetchGroups = orderedCells.enumerated().map { index, cell in
+        let fetchGroups = merge.references.indices.map { index in
             FetchGroupExposure(
                 index: index,
-                reference: cell.centroid,
-                snapshot: snapshotsByCell[cell] ?? WeatherSnapshot(basePM25: 0, windSpeedMetersPerSecond: 0, relativeHumidityPercent: 0, temperatureCelsius: 0, coordinate: cell.centroid),
-                cBase: cBaseByCell[cell] ?? 0,
-                segmentCount: segmentCountByCell[cell] ?? 0
+                reference: merge.references[index],
+                snapshot: snapshots[index],
+                cBase: cBaseValues[index],
+                segmentCount: merge.segmentCounts[index]
             )
         }
 
@@ -149,6 +142,45 @@ actor RouteExposureEstimator: RouteExposureEstimating {
             routes: routeEstimates,
             fetchGroups: fetchGroups,
             modelVersion: predictor.modelVersion ?? "unknown"
+        )
+    }
+
+    private struct MergedFetchGroups {
+        let references: [CLLocationCoordinate2D]
+        let segmentCounts: [Int]
+        let mergedIndicesByRoute: [[Int]]
+    }
+
+    private func mergeGroupsAcrossRoutes(_ perRouteGroups: [[SegmentFetchGroup]]) -> MergedFetchGroups {
+        var referenceLocations: [CLLocation] = []
+        var segmentCounts: [Int] = []
+        var mergedIndicesByRoute: [[Int]] = []
+
+        for groups in perRouteGroups {
+            var mergedIndicesForRoute: [Int] = []
+            for group in groups {
+                let groupLocation = CLLocation(
+                    latitude: group.referenceCoordinate.latitude,
+                    longitude: group.referenceCoordinate.longitude
+                )
+                if let existingIndex = referenceLocations.firstIndex(where: {
+                    $0.distance(from: groupLocation) <= DoseConstants.fetchGroupingRadiusMeters
+                }) {
+                    mergedIndicesForRoute.append(existingIndex)
+                    segmentCounts[existingIndex] += group.segmentIndices.count
+                } else {
+                    referenceLocations.append(groupLocation)
+                    segmentCounts.append(group.segmentIndices.count)
+                    mergedIndicesForRoute.append(referenceLocations.count - 1)
+                }
+            }
+            mergedIndicesByRoute.append(mergedIndicesForRoute)
+        }
+
+        return MergedFetchGroups(
+            references: referenceLocations.map(\.coordinate),
+            segmentCounts: segmentCounts,
+            mergedIndicesByRoute: mergedIndicesByRoute
         )
     }
 

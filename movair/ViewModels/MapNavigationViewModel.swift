@@ -63,7 +63,6 @@ final class MapNavigationViewModel: ObservableObject {
     @Published var isOffRoute: Bool = false
     @Published var unattributedDurationMinutes: Int = 0
     @Published var routeCoordinates: [CLLocationCoordinate2D] = []
-    @Published private(set) var travelledCoordinates: [CLLocationCoordinate2D] = []
     @Published var originCoordinate: CLLocationCoordinate2D?
     @Published var destinationCoordinate: CLLocationCoordinate2D?
     @Published var originTitle: String = "Current location"
@@ -78,9 +77,11 @@ final class MapNavigationViewModel: ObservableObject {
     private var doseSession: LiveRideDoseSession?
     private var latestTrackingSnapshot: RideTrackingSnapshot?
     private var latestDoseMicrograms: Double = 0
+    private var elapsedDurationSeconds: TimeInterval = 0
     private var isTrackingPaused = false
     private var isUpdatingDose = false
     private var pendingDoseSnapshot: RideTrackingSnapshot?
+    private var doseUpdateTask: Task<Void, Never>?
 
     var currentInstruction: Instruction? {
         guard instructions.indices.contains(currentInstructionIndex) else { return nil }
@@ -120,10 +121,10 @@ final class MapNavigationViewModel: ObservableObject {
         }
         startedAt = Date()
         routeCoordinates = route.coordinates
-        travelledCoordinates = []
         isTrackingPaused = false
         distanceKm = 0
         durationMinutes = 0
+        elapsedDurationSeconds = 0
         averageSpeedKmh = 0
         accumulatedExposureUg = 0
         latestDoseMicrograms = 0
@@ -132,6 +133,7 @@ final class MapNavigationViewModel: ObservableObject {
         unattributedDurationMinutes = 0
         latestTrackingSnapshot = nil
         pendingDoseSnapshot = nil
+        doseUpdateTask = nil
         latestHeartRateBPM = nil
         hasArrivedAtDestination = false
         isUpdatingDose = false
@@ -230,30 +232,47 @@ final class MapNavigationViewModel: ObservableObject {
 
     func pauseTracking() {
         isTrackingPaused = true
+        rideTracker?.pause()
     }
 
     func resumeTracking() {
         isTrackingPaused = false
     }
 
-    func makeTripSummary(completedAt: Date = Date()) -> TripSummary {
+    func finishRide(completedAt: Date = Date()) async -> TripSummary {
+        if let rideTracker {
+            let finalSnapshot = rideTracker.snapshot()
+            latestTrackingSnapshot = finalSnapshot
+            await scheduleDoseUpdate(for: finalSnapshot).value
+            applyTrackingMetrics(finalSnapshot)
+        }
+        let rideRecord = await makeRideRecord()
+        return makeTripSummary(completedAt: completedAt, rideRecord: rideRecord)
+    }
+
+    func makeTripSummary(completedAt: Date = Date(), rideRecord: RideRecord? = nil) -> TripSummary {
         TripSummary(
             originTitle: originTitle,
             destinationTitle: destinationTitle,
             distanceKm: distanceKm,
             durationMinutes: durationMinutes,
+            durationSeconds: elapsedDurationSeconds,
             averageSpeedKmh: averageSpeedKmh,
             exposureUg: accumulatedExposureUg,
             exposureLevel: exposureLevel,
             isMeasuredExposure: true,
             unattributedDurationMinutes: unattributedDurationMinutes,
             coordinates: routeCoordinates,
-            travelledCoordinates: travelledCoordinates,
+            travelledCoordinates: rideTracker?.snapshot().travelledCoordinates ?? [],
+            originCoordinate: originCoordinate,
+            destinationCoordinate: destinationCoordinate,
+            segmentConcentrations: rideRecord?.segmentConcentrations ?? [],
+            segmentDurationsSeconds: rideRecord?.segmentDurationsSeconds ?? [],
             completedAt: completedAt
         )
     }
 
-    func makeRideRecord() async -> RideRecord? {
+    private func makeRideRecord() async -> RideRecord? {
         guard let doseSession, let snapshot = latestTrackingSnapshot ?? rideTracker?.snapshot() else {
             return nil
         }
@@ -289,9 +308,9 @@ final class MapNavigationViewModel: ObservableObject {
     private func applyTrackingMetrics(_ snapshot: RideTrackingSnapshot) {
         distanceKm = snapshot.travelledDistanceMeters / 1000
         durationMinutes = Int(snapshot.elapsedDuration / 60)
+        elapsedDurationSeconds = snapshot.elapsedDuration
         unattributedDurationMinutes = Int((snapshot.unattributedDuration / 60).rounded())
         isOffRoute = snapshot.isOffRoute
-        travelledCoordinates = snapshot.travelledCoordinates
         guard snapshot.elapsedDuration > 0 else {
             averageSpeedKmh = 0
             return
@@ -399,12 +418,15 @@ final class MapNavigationViewModel: ObservableObject {
         return (degrees + 360).truncatingRemainder(dividingBy: 360)
     }
 
-    private func scheduleDoseUpdate(for snapshot: RideTrackingSnapshot) {
+    @discardableResult
+    private func scheduleDoseUpdate(for snapshot: RideTrackingSnapshot) -> Task<Void, Never> {
         pendingDoseSnapshot = snapshot
-        guard !isUpdatingDose else { return }
+        if let doseUpdateTask, isUpdatingDose {
+            return doseUpdateTask
+        }
         isUpdatingDose = true
 
-        Task { [weak self] in
+        let task = Task { [weak self] in
             while let self, let currentSnapshot = self.pendingDoseSnapshot, let doseSession = self.doseSession {
                 self.pendingDoseSnapshot = nil
                 let heartRate = self.latestHeartRateBPM ?? 0
@@ -426,5 +448,7 @@ final class MapNavigationViewModel: ObservableObject {
             }
             self?.isUpdatingDose = false
         }
+        doseUpdateTask = task
+        return task
     }
 }

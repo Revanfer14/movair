@@ -16,7 +16,7 @@ final class LocationManager: NSObject, ObservableObject {
         manager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
         manager.distanceFilter = 10
         manager.activityType = .fitness
-        manager.headingFilter = 4
+        manager.headingFilter = 2
         authorizationStatus = manager.authorizationStatus
     }
 
@@ -37,22 +37,27 @@ final class LocationManager: NSObject, ObservableObject {
         guard manager.authorizationStatus == .authorizedWhenInUse
             || manager.authorizationStatus == .authorizedAlways else { return }
         manager.startUpdatingLocation()
+        startHeadingUpdatesIfAvailable()
     }
 
     func stopUpdating() {
         manager.stopUpdatingLocation()
+        manager.stopUpdatingHeading()
+    }
+
+    private func startHeadingUpdatesIfAvailable() {
+        if CLLocationManager.headingAvailable() {
+            manager.startUpdatingHeading()
+        }
     }
 
     func startRideTracking() {
         manager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
         manager.distanceFilter = kCLDistanceFilterNone
         manager.activityType = .fitness
-        manager.headingFilter = 4
+        manager.headingFilter = 2
         manager.pausesLocationUpdatesAutomatically = false
         manager.allowsBackgroundLocationUpdates = true
-        if CLLocationManager.headingAvailable() {
-            manager.startUpdatingHeading()
-        }
         switch manager.authorizationStatus {
         case .authorizedAlways:
             startUpdating()
@@ -72,8 +77,6 @@ final class LocationManager: NSObject, ObservableObject {
         manager.distanceFilter = 10
         manager.allowsBackgroundLocationUpdates = false
         manager.pausesLocationUpdatesAutomatically = true
-        manager.stopUpdatingHeading()
-        userHeading = nil
     }
 }
 
@@ -105,9 +108,8 @@ extension LocationManager: CLLocationManagerDelegate {
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
-        guard newHeading.headingAccuracy >= 0 else { return }
         DispatchQueue.main.async {
-            self.userHeading = newHeading
+            self.userHeading = newHeading.headingAccuracy >= 0 ? newHeading : nil
         }
     }
 
