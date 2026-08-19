@@ -181,12 +181,6 @@ struct TripSummaryView: View {
         trip.destinationCoordinate ?? trip.displayCoordinates.last
     }
 
-    private var traceCaption: String {
-        trip.hasActualTrace
-            ? "GPS trace recorded during your ride"
-            : "Planned route — GPS trace not available"
-    }
-
     private var exposureValueColor: Color {
         switch trip.exposureLevel {
         case .low: return Color.Brand.primaryGreen
@@ -232,11 +226,6 @@ struct TripSummaryView: View {
                 Text(trip.routeTitle)
                     .font(Font.Brand.bodyBold)
                     .foregroundStyle(Color.primary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Text(traceCaption)
-                    .font(Font.Brand.footnote)
-                    .foregroundStyle(Color.Brand.darkgray)
                     .fixedSize(horizontal: false, vertical: true)
 
                 MapRouteMetricRow(items: [
