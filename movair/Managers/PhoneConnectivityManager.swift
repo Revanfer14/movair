@@ -23,6 +23,7 @@ final class PhoneConnectivityManager: NSObject, ObservableObject {
     private var session: WCSession?
     private var lastSentPayload: WatchSessionPayload?
     private var lastSentAt: Date?
+    private var lastSentRouteCoordinates: [CLLocationCoordinate2D]?
     private let polylineSimplifier: PolylineSimplifying = PolylineSimplifier()
 
     private override init() {
@@ -123,8 +124,20 @@ final class PhoneConnectivityManager: NSObject, ObservableObject {
     }
 
     func sendRouteCoordinates(_ coordinates: [CLLocationCoordinate2D]) {
-        guard let session, session.activationState == .activated, !coordinates.isEmpty else { return }
+        guard !coordinates.isEmpty else { return }
+        lastSentRouteCoordinates = coordinates
 
+        guard let session, session.activationState == .activated else { return }
+        transferRouteCoordinates(coordinates, session: session)
+    }
+
+    private func resendRouteCoordinatesIfNeeded() {
+        guard let session, session.activationState == .activated,
+              let coordinates = lastSentRouteCoordinates else { return }
+        transferRouteCoordinates(coordinates, session: session)
+    }
+
+    private func transferRouteCoordinates(_ coordinates: [CLLocationCoordinate2D], session: WCSession) {
         let simplified = polylineSimplifier.simplify(coordinates, maxPointCount: Self.maxRoutePointsSentToWatch)
         let points = simplified.map { [$0.latitude, $0.longitude] }
         let message: [String: Any] = [
@@ -136,6 +149,7 @@ final class PhoneConnectivityManager: NSObject, ObservableObject {
     func resetForNewRide() {
         lastSentPayload = nil
         lastSentAt = nil
+        lastSentRouteCoordinates = nil
         latestHeartRateBPM = nil
         let payload = WatchSessionPayload(
             phase: .active,
@@ -160,6 +174,7 @@ final class PhoneConnectivityManager: NSObject, ObservableObject {
     func resetToIdle() {
         lastSentPayload = nil
         lastSentAt = nil
+        lastSentRouteCoordinates = nil
         latestHeartRateBPM = nil
         let payload = WatchSessionPayload(
             phase: .idle,
@@ -385,6 +400,7 @@ extension PhoneConnectivityManager: WCSessionDelegate {
                     force: true
                 )
             }
+            resendRouteCoordinatesIfNeeded()
             return
         }
 

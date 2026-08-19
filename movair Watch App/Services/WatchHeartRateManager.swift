@@ -44,18 +44,34 @@ final class WatchHeartRateManager: NSObject, ObservableObject {
 
     func stop() {
         isMonitoringRequested = false
-        guard let workoutSession, let workoutBuilder else {
+        guard let workoutSession else {
             heartRateBPM = nil
             return
         }
 
-        workoutSession.end()
-        workoutBuilder.endCollection(withEnd: Date()) { _, _ in
-            workoutBuilder.discardWorkout()
+        switch workoutSession.state {
+        case .running, .paused, .notStarted, .prepared:
+            workoutSession.end()
+        default:
+            finalizeEndedWorkout()
         }
-        self.workoutSession = nil
-        self.workoutBuilder = nil
-        heartRateBPM = nil
+    }
+
+    private func finalizeEndedWorkout() {
+        guard let workoutBuilder else {
+            workoutSession = nil
+            heartRateBPM = nil
+            return
+        }
+
+        workoutBuilder.endCollection(withEnd: Date()) { [weak self] _, _ in
+            workoutBuilder.discardWorkout()
+            Task { @MainActor in
+                self?.workoutSession = nil
+                self?.workoutBuilder = nil
+                self?.heartRateBPM = nil
+            }
+        }
     }
 
     private func beginWorkout() {
@@ -94,7 +110,12 @@ extension WatchHeartRateManager: HKWorkoutSessionDelegate {
         didChangeTo toState: HKWorkoutSessionState,
         from fromState: HKWorkoutSessionState,
         date: Date
-    ) {}
+    ) {
+        guard toState == .ended else { return }
+        Task { @MainActor in
+            self.finalizeEndedWorkout()
+        }
+    }
 
     nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
         Task { @MainActor in

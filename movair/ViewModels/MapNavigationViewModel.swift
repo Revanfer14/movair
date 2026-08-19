@@ -89,6 +89,9 @@ final class MapNavigationViewModel: ObservableObject {
     private var isShowingRejoinGuide = false
     private var latestDoseMicrograms: Double = 0
     private var elapsedDurationSeconds: TimeInterval = 0
+    private var liveDisplayAnchorUptime: TimeInterval = ProcessInfo.processInfo.systemUptime
+    private var liveDisplayAnchorSeconds: TimeInterval = 0
+    private var pausedLiveElapsedSeconds: Int?
     private var isTrackingPaused = false
     private var isUpdatingDose = false
     private var pendingDoseSnapshot: RideTrackingSnapshot?
@@ -96,6 +99,12 @@ final class MapNavigationViewModel: ObservableObject {
 
     var elapsedSeconds: Int {
         Int(elapsedDurationSeconds)
+    }
+
+    var liveElapsedSeconds: Int {
+        guard !isTrackingPaused else { return pausedLiveElapsedSeconds ?? Int(elapsedDurationSeconds) }
+        let secondsSinceAnchor = ProcessInfo.processInfo.systemUptime - liveDisplayAnchorUptime
+        return Int(liveDisplayAnchorSeconds + max(0, secondsSinceAnchor))
     }
 
     var currentInstruction: Instruction? {
@@ -146,6 +155,9 @@ final class MapNavigationViewModel: ObservableObject {
         distanceKm = 0
         durationMinutes = 0
         elapsedDurationSeconds = 0
+        liveDisplayAnchorUptime = ProcessInfo.processInfo.systemUptime
+        liveDisplayAnchorSeconds = 0
+        pausedLiveElapsedSeconds = nil
         averageSpeedKmh = 0
         accumulatedExposureUg = 0
         latestDoseMicrograms = 0
@@ -255,12 +267,17 @@ final class MapNavigationViewModel: ObservableObject {
     }
 
     func pauseTracking() {
+        pausedLiveElapsedSeconds = liveElapsedSeconds
         isTrackingPaused = true
         rideTracker?.pause()
     }
 
     func resumeTracking() {
         isTrackingPaused = false
+        let resumeBaseline = pausedLiveElapsedSeconds ?? Int(elapsedDurationSeconds)
+        pausedLiveElapsedSeconds = nil
+        liveDisplayAnchorUptime = ProcessInfo.processInfo.systemUptime
+        liveDisplayAnchorSeconds = TimeInterval(resumeBaseline)
     }
 
     func finishRide(completedAt: Date = Date()) async -> TripSummary {
@@ -397,6 +414,12 @@ final class MapNavigationViewModel: ObservableObject {
         distanceKm = snapshot.travelledDistanceMeters / 1000
         durationMinutes = Int(snapshot.elapsedDuration / 60)
         elapsedDurationSeconds = snapshot.elapsedDuration
+
+        let now = ProcessInfo.processInfo.systemUptime
+        let extrapolatedBeforeSync = liveDisplayAnchorSeconds + max(0, now - liveDisplayAnchorUptime)
+        liveDisplayAnchorSeconds = max(extrapolatedBeforeSync, snapshot.elapsedDuration)
+        liveDisplayAnchorUptime = now
+
         unattributedDurationMinutes = Int((snapshot.unattributedDuration / 60).rounded())
         isOffRoute = snapshot.isOffRoute
         guard snapshot.elapsedDuration > 0 else {

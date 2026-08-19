@@ -3,7 +3,7 @@ import SwiftUI
 struct MapNavigationStats: View {
     let mode: NavigationMode
     let distanceKm: Double
-    let durationMinutes: Int
+    let durationSeconds: Int
     let averageSpeedKmh: Double
     let accumulatedExposureUg: Int
     let exposureLevel: ExposureLevel
@@ -16,7 +16,7 @@ struct MapNavigationStats: View {
     init(
         mode: NavigationMode,
         distanceKm: Double,
-        durationMinutes: Int,
+        durationSeconds: Int,
         averageSpeedKmh: Double,
         accumulatedExposureUg: Int,
         exposureLevel: ExposureLevel,
@@ -28,7 +28,7 @@ struct MapNavigationStats: View {
     ) {
         self.mode = mode
         self.distanceKm = distanceKm
-        self.durationMinutes = durationMinutes
+        self.durationSeconds = durationSeconds
         self.averageSpeedKmh = averageSpeedKmh
         self.accumulatedExposureUg = accumulatedExposureUg
         self.exposureLevel = exposureLevel
@@ -37,6 +37,16 @@ struct MapNavigationStats: View {
         self.onPause = onPause
         self.onResume = onResume
         self.onFinish = onFinish
+    }
+
+    private var durationLabel: String {
+        let hours = durationSeconds / 3600
+        let minutes = (durationSeconds % 3600) / 60
+        let seconds = durationSeconds % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
+        }
+        return String(format: "%d:%02d", minutes, seconds)
     }
 
     var body: some View {
@@ -85,7 +95,7 @@ struct MapNavigationStats: View {
                     .frame(height: 54)
                 Spacer()
 
-                metric(value: "\(durationMinutes) min", label: "Time")
+                metric(value: durationLabel, label: "Time")
                     .frame(maxWidth: .infinity)
 
                 Spacer()
@@ -132,7 +142,7 @@ struct MapNavigationStats: View {
             MapNavigationStats(
                 mode: .active,
                 distanceKm: 14,
-                durationMinutes: 37,
+                durationSeconds: 37 * 60 + 12,
                 averageSpeedKmh: 8,
                 accumulatedExposureUg: 115,
                 exposureLevel: .low
@@ -140,7 +150,7 @@ struct MapNavigationStats: View {
             MapNavigationStats(
                 mode: .paused,
                 distanceKm: 14,
-                durationMinutes: 37,
+                durationSeconds: 37 * 60 + 12,
                 averageSpeedKmh: 8,
                 accumulatedExposureUg: 115,
                 exposureLevel: .veryHigh

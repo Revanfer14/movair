@@ -48,19 +48,21 @@ struct ActiveNavigationView: View {
 
                 mapControls
 
-                MapNavigationStats(
-                    mode: isPaused ? .paused : .active,
-                    distanceKm: viewModel.distanceKm,
-                    durationMinutes: viewModel.durationMinutes,
-                    averageSpeedKmh: viewModel.averageSpeedKmh,
-                    accumulatedExposureUg: viewModel.accumulatedExposureUg,
-                    exposureLevel: viewModel.exposureLevel,
-                    isOffRoute: viewModel.isOffRoute,
-                    unattributedDurationMinutes: viewModel.unattributedDurationMinutes,
-                    onPause: onPause,
-                    onResume: onResume,
-                    onFinish: onFinish
-                )
+                TimelineView(.periodic(from: .now, by: 1)) { _ in
+                    MapNavigationStats(
+                        mode: isPaused ? .paused : .active,
+                        distanceKm: viewModel.distanceKm,
+                        durationSeconds: viewModel.liveElapsedSeconds,
+                        averageSpeedKmh: viewModel.averageSpeedKmh,
+                        accumulatedExposureUg: viewModel.accumulatedExposureUg,
+                        exposureLevel: viewModel.exposureLevel,
+                        isOffRoute: viewModel.isOffRoute,
+                        unattributedDurationMinutes: viewModel.unattributedDurationMinutes,
+                        onPause: onPause,
+                        onResume: onResume,
+                        onFinish: onFinish
+                    )
+                }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 16)
             }

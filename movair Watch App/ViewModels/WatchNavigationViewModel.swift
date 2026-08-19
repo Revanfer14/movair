@@ -22,6 +22,8 @@ final class WatchNavigationViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var timer: Timer?
     private var accumulatedSeconds: Int = 0
+    private var activeAnchorUptime: TimeInterval?
+    private var activeAnchorSeconds: Int = 0
 
     init(
         connectivity: WatchConnectivityManager = .shared,
@@ -77,8 +79,13 @@ final class WatchNavigationViewModel: ObservableObject {
 
         distanceKm = payload.distanceKm
         accumulatedExposureUg = payload.exposureUg
-        elapsedMinutes = payload.elapsedMinutes
-        accumulatedSeconds = payload.elapsedSeconds
+
+        let isRoutineUpdateWithinActiveState = newState == state && newState == .active
+        if isRoutineUpdateWithinActiveState {
+            setAccumulatedSeconds(max(currentAccumulatedSeconds(), payload.elapsedSeconds))
+        } else {
+            setAccumulatedSeconds(payload.elapsedSeconds)
+        }
         instructionText = payload.instructionText
         instructionDistanceMeters = payload.instructionDistanceMeters
         instructionStreetName = payload.instructionStreetName
@@ -113,8 +120,12 @@ final class WatchNavigationViewModel: ObservableObject {
     func pause() {
         guard state == .active else { return }
 
+        let frozenSeconds = currentAccumulatedSeconds()
         stopTimer()
         state = .paused
+        accumulatedSeconds = frozenSeconds
+        elapsedMinutes = frozenSeconds / 60
+        activeAnchorUptime = nil
         heartRateManager.pause()
         connectivity.sendAction(.pause)
     }
@@ -129,8 +140,12 @@ final class WatchNavigationViewModel: ObservableObject {
     }
 
     func finish() {
+        let frozenSeconds = currentAccumulatedSeconds()
         stopTimer()
         state = .completed
+        accumulatedSeconds = frozenSeconds
+        elapsedMinutes = frozenSeconds / 60
+        activeAnchorUptime = nil
         heartRateManager.stop()
         connectivity.sendAction(.finish)
     }
@@ -139,9 +154,10 @@ final class WatchNavigationViewModel: ObservableObject {
     }
 
     var elapsedTimeLabel: String {
-        let minutes = accumulatedSeconds / 60
-        let seconds = accumulatedSeconds % 60
-        return String(format: "%d:%02d", minutes, seconds)
+        let seconds = currentAccumulatedSeconds()
+        let minutes = seconds / 60
+        let remainderSeconds = seconds % 60
+        return String(format: "%d:%02d", minutes, remainderSeconds)
     }
 
     func resetToIdle() {
@@ -151,6 +167,8 @@ final class WatchNavigationViewModel: ObservableObject {
         accumulatedExposureUg = 0
         elapsedMinutes = 0
         accumulatedSeconds = 0
+        activeAnchorUptime = nil
+        activeAnchorSeconds = 0
         instructionText = ""
         instructionDistanceMeters = 0
         instructionStreetName = ""
@@ -163,6 +181,8 @@ final class WatchNavigationViewModel: ObservableObject {
 
     private func startTimer() {
         stopTimer()
+        activeAnchorUptime = ProcessInfo.processInfo.systemUptime
+        activeAnchorSeconds = accumulatedSeconds
         timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.tick()
@@ -177,8 +197,21 @@ final class WatchNavigationViewModel: ObservableObject {
 
     private func tick() {
         guard state == .active else { return }
-        accumulatedSeconds += 1
+        accumulatedSeconds = currentAccumulatedSeconds()
         elapsedMinutes = accumulatedSeconds / 60
+    }
+
+    private func currentAccumulatedSeconds() -> Int {
+        guard state == .active, let activeAnchorUptime else { return accumulatedSeconds }
+        let secondsSinceAnchor = ProcessInfo.processInfo.systemUptime - activeAnchorUptime
+        return activeAnchorSeconds + Int(max(0, secondsSinceAnchor).rounded())
+    }
+
+    private func setAccumulatedSeconds(_ seconds: Int) {
+        accumulatedSeconds = seconds
+        elapsedMinutes = seconds / 60
+        activeAnchorUptime = ProcessInfo.processInfo.systemUptime
+        activeAnchorSeconds = seconds
     }
 
     deinit {
