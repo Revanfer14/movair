@@ -8,7 +8,6 @@ final class HistoryViewModel: ObservableObject {
     @Published private(set) var weekExposures: [Int?] = []
 
     let store: TripHistoryStore
-    private let dailyBudgetUg: Int = 261
     private let highlightGenerator: HistoryHighlightGenerating
     private let dailyBudgetUg: Int = 240
 
