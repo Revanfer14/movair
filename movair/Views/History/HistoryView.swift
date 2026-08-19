@@ -263,7 +263,7 @@ struct HistoryView: View {
 
     private var aboutSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("About Movair")
+            Text("About GoWays")
                 .font(Font.Brand.title2Bold)
                 .foregroundStyle(Color.Brand.labelPrimary)
 
