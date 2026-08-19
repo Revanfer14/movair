@@ -20,6 +20,8 @@ struct ActiveNavigationView: View {
                 centerCoordinate: locationManager.userLocation,
                 showsUserLocation: true,
                 routeCoordinates: viewModel.routeCoordinates,
+                displayedRouteCoordinates: viewModel.remainingRouteCoordinates,
+                isOffRoute: viewModel.isOffRoute,
                 originCoordinate: viewModel.originCoordinate,
                 destinationCoordinate: viewModel.destinationCoordinate,
                 fitsRouteInView: false,

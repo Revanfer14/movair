@@ -1,8 +1,8 @@
-# CLAUDE.md — CleanRoute iOS
+# CLAUDE.md — GoWays iOS
 
-Panduan kerja buat ngembangin app CleanRoute. Kalau ada konflik antara file ini dan asumsi lu, **file ini yang menang**. Kalau ada konflik soal rumus, `RUMUS.md` yang menang.
+Panduan kerja buat ngembangin app GoWays. Kalau ada konflik antara file ini dan asumsi lu, **file ini yang menang**. Kalau ada konflik soal rumus, `RUMUS.md` yang menang.
 
-**Target user: pesepeda / cyclist.** Bukan pengendara motor. Kalau nemu sisa referensi "motor" di dokumen lama (`v4-summary.md`, `CleanRoute-ML-Plan_v4.0.md`), itu artefak versi sebelumnya — abaikan dan catat biar diperbaiki. `RUMUS.md` udah diupdate.
+**Target user: pesepeda / cyclist.** Bukan pengendara motor. Kalau nemu sisa referensi "motor" di dokumen lama (`v4-summary.md`, `GoWays-ML-Plan_v4.0.md`), itu artefak versi sebelumnya — abaikan dan catat biar diperbaiki. `RUMUS.md` udah diupdate.
 
 ---
 
@@ -11,14 +11,14 @@ Panduan kerja buat ngembangin app CleanRoute. Kalau ada konflik antara file ini 
 ### 0.1 No comments
 
 - **JANGAN nulis comment apapun** di kode Swift baru: no `//`, no `/* */`, no doc comment (`///`), no `// MARK:`, no `// TODO:`.
-- **JANGAN hapus header comment default yang di-generate Xcode** (blok `//  FileName.swift` / `//  CleanRoute` / `//  Created by ...` di paling atas file). Itu tetap.
+- **JANGAN hapus header comment default yang di-generate Xcode** (blok `//  FileName.swift` / `//  GoWays` / `//  Created by ...` di paling atas file). Itu tetap.
 - Struktur file dibikin lewat **pemecahan file & tipe**, bukan lewat comment separator. Kalau lu ngerasa butuh `// MARK:` buat misahin bagian → itu sinyal file-nya kepanjangan, pecah jadi file baru.
 - Konsekuensi: nama variabel, fungsi, dan tipe harus **self-explanatory**. `let cubicMetersPerMinute` bukan `let ve`. `func splitPolylineEvery200m` bukan `func split`.
 
 ### 0.2 Folder structure (fixed)
 
 ```
-CleanRoute/
+GoWays/
 ├── Extensions/     Color+, Font+, dan extension utility lain
 ├── Components/     View kecil reusable (card, badge, button, chip)
 ├── Models/         struct/enum data murni, no logic, no networking
@@ -51,7 +51,7 @@ CleanRoute/
 
 App navigasi iOS **khusus pesepeda** di Jabodetabek yang me-ranking rute berdasarkan **estimasi dosis paparan PM2.5**, bukan waktu tempuh — lalu **mengukur dosis aktual** selama perjalanan berlangsung.
 
-> "Google Maps kasih rute tercepat. CleanRoute kasih rute yang paling sedikit bikin lu sakit."
+> "Google Maps kasih rute tercepat. GoWays kasih rute yang paling sedikit bikin lu sakit."
 
 Ada **dua mode** dan bedanya penting:
 
@@ -70,7 +70,7 @@ User input origin → destination
   → potong tiap polyline jadi segmen ~200m
   → kelompokkan segmen jadi grup fetch (clustering jarak, threshold 20 km)
   → fetch Open-Meteo 1× per grup, pakai koordinat titik referensi grup
-  → CoreML CleanRoutePM25 → C_base per grup   ← satu-satunya lapisan ML
+  → CoreML GoWaysPM25 → C_base per grup   ← satu-satunya lapisan ML
   → roads_data.json lookup per segmen → M_road, M_green
   → Cᵢ = C_base × M_road × M_green
   → tᵢ = ETA_total × (distanceᵢ / distance_total)
@@ -98,7 +98,7 @@ User mulai gowes
 
 | File                     | Isi                          | Catatan                                                                                           |
 | ------------------------ | ---------------------------- | ------------------------------------------------------------------------------------------------- |
-| `CleanRoutePM25.mlmodel` | Model final, udah dikonversi | Output **skala log**                                                                              |
+| `GoWaysPM25.mlmodel` | Model final, udah dikonversi | Output **skala log**                                                                              |
 | `model_gbr_v4_log.pkl`   | Sumber sklearn               | Referensi doang, gak dipakai runtime                                                              |
 | `roads_data.json`        | 147.027 cell, grid 166m      | Versi greenery yang udah dikoreksi (1.516 full-green cell) meskipun nama file gak ada suffix `_2` |
 
@@ -210,10 +210,10 @@ Rute pendek (< threshold total) → 1 fetch. Rute panjang → jumlah fetch **eme
 
 ### 4.3 `PMPredictor`
 
-Wrapper `CleanRoutePM25.mlmodel`.
+Wrapper `GoWaysPM25.mlmodel`.
 
 - Input 5 fitur, urutannya sesuai kelas Swift generated: `base_pm25`, `wind_speed`, `relative_humidity`, `hour_of_day`, `is_weekend`.
-- Cek nama input/output property di kelas generated (`CleanRoutePM25Input` / `CleanRoutePM25Output`) sebelum nulis kode — jangan ngarang nama, converter sklearn sering ngasih nama output generik.
+- Cek nama input/output property di kelas generated (`GoWaysPM25Input` / `GoWaysPM25Output`) sebelum nulis kode — jangan ngarang nama, converter sklearn sering ngasih nama output generik.
 - **Output harus di-`expm1()`.** Kontrak #1. Bungkus di satu tempat, jangan sampai ada caller yang bisa dapet nilai mentah skala log.
 - `hour_of_day` dan `is_weekend` diturunkan dari `Calendar` dengan `TimeZone(identifier: "Asia/Jakarta")`, bukan `.current`.
 - Model di-load sekali, disimpan sebagai instance. Jangan di-init per segmen.
@@ -356,7 +356,7 @@ Efek gabungan sama perubahan `VE`: `0.014 × 1.5 = 0.021` → `0.040`, angka dos
 - **Klaim yang boleh:** "rute dengan komposisi jalan dan waktu tempuh yang paparannya lebih rendah".
   **Klaim yang dilarang:** "kami menemukan area yang udaranya lebih bersih". Model gak bisa bedain area — pada pasangan rute dengan kontras area ekstrem, arah tebakannya cuma 43,75% benar.
 - Sepeda-only. **Gak ada transport mode picker.**
-- Semua copy user-facing bahasa Indonesia.
+- Semua copy user-facing in English.
 
 ---
 
@@ -409,6 +409,6 @@ Efek gabungan sama perubahan `VE`: `0.014 × 1.5 = 0.021` → `0.040`, angka dos
 | Dokumen                      | Yang salah                                                                                                                                                                                     |
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `v4-summary.md`              | Target motor · `VE = 0.014` · `F_moda = 1.5` · resolusi CAMS ditulis 11 km · filter tol pakai MapKit · `roads_data_2.json` (nama file aktual tanpa suffix) · dedup fetch pakai kuantisasi grid |
-| `CleanRoute-ML-Plan_v4.0.md` | Target motor · routing MapKit · filter tol manual · `congestion_ratio` sebagai fungsi deterministik (sekarang 1.0 seragam) · dedup fetch pakai kuantisasi grid                                 |
+| `GoWays-ML-Plan_v4.0.md` | Target motor · routing MapKit · filter tol manual · `congestion_ratio` sebagai fungsi deterministik (sekarang 1.0 seragam) · dedup fetch pakai kuantisasi grid                                 |
 
 Dua dokumen itu tetap valid buat bagian **ML/training** (dataset, gate, LOSO, SET-8). Yang stale cuma bagian **runtime/produk**. Kalau ada konflik, `CLAUDE.md` dan `RUMUS.md` yang menang.

@@ -7,12 +7,6 @@ struct TripShareCardView: View {
     let trip: TripSummary
     let mapImage: UIImage
 
-    private var footerCaption: String {
-        trip.hasActualTrace
-            ? "Jejak GPS gowes · estimasi model CleanRoute, bukan pengukuran sensor"
-            : "Rencana rute — jejak GPS belum tersedia · estimasi model CleanRoute"
-    }
-
     var body: some View {
         ZStack(alignment: .topLeading) {
             Image(uiImage: mapImage)
@@ -47,7 +41,8 @@ struct TripShareCardView: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text(trip.exposureLevel.title)
                     .font(Font.Brand.largeTitleBold)
-                    .foregroundStyle(Color.Brand.black)
+                    .fontWeight(exposureTitleFontWeight)
+                    .foregroundStyle(trip.exposureLevel.primaryColor)
 
                 HStack(alignment: .lastTextBaseline, spacing: 6) {
                     Text("\(trip.exposureUg) µg")
@@ -59,7 +54,11 @@ struct TripShareCardView: View {
                 }
                 .padding(.top, 8)
 
-                Text("Rute ini menghabiskan \(trip.dailyExposurePercent)% kuota napas bersih harianmu")
+                (
+                    Text("Rute ini menghabiskan ") +
+                    Text("\(trip.dailyExposurePercent)%").bold() +
+                    Text(" kuota napas bersih harianmu")
+                )
                     .font(Font.Brand.footnote)
                     .foregroundStyle(Color.Brand.darkgray)
                     .fixedSize(horizontal: false, vertical: true)
@@ -72,22 +71,31 @@ struct TripShareCardView: View {
                     statBlock(value: trip.durationLabel, label: "Duration")
                 }
                 .padding(.top, 68)
-
-                Spacer()
-
-                Text(footerCaption)
-                    .font(Font.Brand.footnote)
-                    .foregroundStyle(Color.Brand.darkgray)
-                    .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.top, 133)
             .padding(.leading, 27)
             .padding(.bottom, 32)
             .padding(.trailing, 27)
+
+            Text("GoWays")
+                .font(Font.Brand.footnoteBold)
+                .foregroundStyle(Color.Brand.darkgray)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                .padding(.trailing, 40)
+                .padding(.bottom, 40)
         }
         .frame(width: Self.cardSize.width, height: Self.cardSize.height)
         .background(Color.Brand.white)
         .environment(\.colorScheme, .light)
+    }
+
+    private var exposureTitleFontWeight: Font.Weight {
+        switch trip.exposureLevel {
+        case .high, .extreme:
+            return .heavy
+        case .low, .moderate, .veryHigh:
+            return .bold
+        }
     }
 
     private func statBlock(value: String, label: String) -> some View {
