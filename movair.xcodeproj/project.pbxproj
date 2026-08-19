@@ -240,20 +240,20 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 8QT63UDSK5;
+				DEVELOPMENT_TEAM = NS8WSVTKAD;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = GoWays;
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Movair uses your heart rate during rides to estimate air intake.";
-				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Movair temporarily starts a cycling workout to read your heart rate during navigation.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "GoWays uses your heart rate during rides to estimate air intake.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "GoWays temporarily starts a cycling workout to read your heart rate during navigation.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.sweetseventeen.movair.ios;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.sweetseventeen.movair.app;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.sweetseventeen.movair.ios.watchkitapp;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sweetseventeen.movair.app.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
@@ -277,20 +277,20 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 8QT63UDSK5;
+				DEVELOPMENT_TEAM = NS8WSVTKAD;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = GoWays;
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Movair uses your heart rate during rides to estimate air intake.";
-				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Movair temporarily starts a cycling workout to read your heart rate during navigation.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "GoWays uses your heart rate during rides to estimate air intake.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "GoWays temporarily starts a cycling workout to read your heart rate during navigation.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.sweetseventeen.movair.ios;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.sweetseventeen.movair.app;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.sweetseventeen.movair.ios.watchkitapp;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sweetseventeen.movair.app.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
@@ -441,7 +441,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 8QT63UDSK5;
+				DEVELOPMENT_TEAM = NS8WSVTKAD;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = movair/Info.plist;
@@ -461,7 +461,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.sweetseventeen.movair.ios;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sweetseventeen.movair.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -485,7 +485,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 8QT63UDSK5;
+				DEVELOPMENT_TEAM = NS8WSVTKAD;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = movair/Info.plist;
@@ -505,7 +505,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.sweetseventeen.movair.ios;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sweetseventeen.movair.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
