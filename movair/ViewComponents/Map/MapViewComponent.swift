@@ -107,7 +107,7 @@ struct MapViewComponent: UIViewRepresentable {
     var showsUserLocation: Bool = true
     var routeCoordinates: [CLLocationCoordinate2D] = []
     var displayedRouteCoordinates: [CLLocationCoordinate2D]? = nil
-    var isOffRoute: Bool = false
+    var guideAnchorCoordinate: CLLocationCoordinate2D? = nil
     var plannedRouteCoordinates: [CLLocationCoordinate2D] = []
     var isTraceMeasured: Bool = true
     var breaksTraceAtGaps: Bool = false
@@ -292,14 +292,28 @@ struct MapViewComponent: UIViewRepresentable {
             context.coordinator.lastRouteOverlayKey = routeKey
         }
 
+        let connectorKey = connectorOverlayKey()
+        guard connectorKey != context.coordinator.lastConnectorKey else { return }
+        context.coordinator.lastConnectorKey = connectorKey
+
         let connectorOverlays = mapView.overlays.filter { $0 is DottedConnectorPolyline }
         mapView.removeOverlays(connectorOverlays)
 
-        if isNavigationTracking, isOffRoute, let userCoord = centerCoordinate,
-           let anchorCoord = (displayedRouteCoordinates ?? routeCoordinates).first {
+        if isNavigationTracking, let userCoord = centerCoordinate, let anchorCoord = guideAnchorCoordinate {
             let connector = DottedConnectorPolyline(coordinates: [userCoord, anchorCoord], count: 2)
             mapView.addOverlay(connector)
         }
+    }
+
+    private func connectorOverlayKey() -> String {
+        guard isNavigationTracking, let userCoord = centerCoordinate, let anchorCoord = guideAnchorCoordinate else {
+            return "none"
+        }
+        return String(
+            format: "%.5f,%.5f_%.5f,%.5f",
+            userCoord.latitude, userCoord.longitude,
+            anchorCoord.latitude, anchorCoord.longitude
+        )
     }
 
     private func addRouteOverlays(on mapView: MKMapView) {
@@ -346,7 +360,7 @@ struct MapViewComponent: UIViewRepresentable {
 
         updateNavigationUserAnnotation(on: mapView, context: context)
 
-        if isNavigationTracking, isOffRoute, let anchorCoord = (displayedRouteCoordinates ?? routeCoordinates).first {
+        if isNavigationTracking, let anchorCoord = guideAnchorCoordinate {
             let startAnnotation = RouteStartAnnotation(coordinate: anchorCoord)
             mapView.addAnnotation(startAnnotation)
         }
@@ -464,6 +478,7 @@ struct MapViewComponent: UIViewRepresentable {
         var hasCenteredNavigation = false
         var lastFittedRouteKey: String = ""
         var lastRouteOverlayKey: String = ""
+        var lastConnectorKey: String = ""
         var userHasDraggedMap = false
         var lastAppliedHeading: Double = 0
         var lastAppliedCenter: CLLocationCoordinate2D?

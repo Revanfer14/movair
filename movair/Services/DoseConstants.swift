@@ -13,6 +13,7 @@ enum DoseConstants {
     static let segmentLengthMeters = 200.0
     static let forwardTransitionBufferMeters = 20.0
     static let offRouteDistanceMeters = 50.0
+    static let routeJoinDistanceMeters = 25.0
     static let offRouteGraceSeconds: TimeInterval = 15
     static let backwardTransitionConfirmCount = 3
     static let maxPredictRowsPerRequest = 64
