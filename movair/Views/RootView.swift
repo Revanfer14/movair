@@ -12,15 +12,16 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            if hasCompletedOnboarding {
-                AppTabView()
-                    .transition(.opacity)
-            } else {
-                OnboardingView {
-                    hasCompletedOnboarding = true
-                }
-                .transition(.opacity)
-            }
+            AppTabView()
+//            if hasCompletedOnboarding {
+//                AppTabView()
+//                    .transition(.opacity)
+//            } else {
+//                OnboardingView {
+//                    hasCompletedOnboarding = true
+//                }
+//                .transition(.opacity)
+//            }
         }
         .animation(.easeInOut(duration: 0.4), value: hasCompletedOnboarding)
     }
