@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct movairWatchApp: App {
+struct GoWaysWatchApp: App {
     @StateObject private var connectivity = WatchConnectivityManager.shared
 
     var body: some Scene {

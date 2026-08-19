@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		58217A753031DFF4005F5C1F /* movair Watch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 58217A6B3031DFF3005F5C1F /* movair Watch Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		58217A753031DFF4005F5C1F /* GoWays Watch Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 58217A6B3031DFF3005F5C1F /* GoWays Watch Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -16,7 +16,7 @@
 			containerPortal = 76B27471302CADCE00645351 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 58217A6A3031DFF3005F5C1F;
-			remoteInfo = "movair Watch Watch App";
+			remoteInfo = "GoWays Watch Watch App";
 		};
 /* End PBXContainerItemProxy section */
 
@@ -27,7 +27,7 @@
 			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
 			dstSubfolderSpec = 16;
 			files = (
-				58217A753031DFF4005F5C1F /* movair Watch Watch App.app in Embed Watch Content */,
+				58217A753031DFF4005F5C1F /* GoWays Watch Watch App.app in Embed Watch Content */,
 			);
 			name = "Embed Watch Content";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -35,32 +35,32 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		58217A6B3031DFF3005F5C1F /* movair Watch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "movair Watch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		76B27479302CADCE00645351 /* movair.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = movair.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		58217A6B3031DFF3005F5C1F /* GoWays Watch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "GoWays Watch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		76B27479302CADCE00645351 /* GoWays.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GoWays.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		76B2748A302CAFEF00645351 /* Exceptions for "movair" folder in "movair" target */ = {
+		76B2748A302CAFEF00645351 /* Exceptions for "GoWays" folder in "GoWays" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
-			target = 76B27478302CADCE00645351 /* movair */;
+			target = 76B27478302CADCE00645351 /* GoWays */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		58217A6C3031DFF3005F5C1F /* movair Watch App */ = {
+		58217A6C3031DFF3005F5C1F /* GoWays Watch App */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = "movair Watch App";
+			path = "GoWays Watch App";
 			sourceTree = "<group>";
 		};
-		76B2747B302CADCE00645351 /* movair */ = {
+		76B2747B302CADCE00645351 /* GoWays */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				76B2748A302CAFEF00645351 /* Exceptions for "movair" folder in "movair" target */,
+				76B2748A302CAFEF00645351 /* Exceptions for "GoWays" folder in "GoWays" target */,
 			);
-			path = movair;
+			path = GoWays;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -86,8 +86,8 @@
 		76B27470302CADCE00645351 = {
 			isa = PBXGroup;
 			children = (
-				76B2747B302CADCE00645351 /* movair */,
-				58217A6C3031DFF3005F5C1F /* movair Watch App */,
+				76B2747B302CADCE00645351 /* GoWays */,
+				58217A6C3031DFF3005F5C1F /* GoWays Watch App */,
 				76B2747A302CADCE00645351 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -95,8 +95,8 @@
 		76B2747A302CADCE00645351 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				76B27479302CADCE00645351 /* movair.app */,
-				58217A6B3031DFF3005F5C1F /* movair Watch Watch App.app */,
+				76B27479302CADCE00645351 /* GoWays.app */,
+				58217A6B3031DFF3005F5C1F /* GoWays Watch Watch App.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -104,9 +104,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		58217A6A3031DFF3005F5C1F /* movair Watch Watch App */ = {
+		58217A6A3031DFF3005F5C1F /* GoWays Watch Watch App */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 58217A763031DFF4005F5C1F /* Build configuration list for PBXNativeTarget "movair Watch Watch App" */;
+			buildConfigurationList = 58217A763031DFF4005F5C1F /* Build configuration list for PBXNativeTarget "GoWays Watch Watch App" */;
 			buildPhases = (
 				58217A673031DFF3005F5C1F /* Sources */,
 				58217A683031DFF3005F5C1F /* Frameworks */,
@@ -117,18 +117,18 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				58217A6C3031DFF3005F5C1F /* movair Watch App */,
+				58217A6C3031DFF3005F5C1F /* GoWays Watch App */,
 			);
-			name = "movair Watch Watch App";
+			name = "GoWays Watch Watch App";
 			packageProductDependencies = (
 			);
-			productName = "movair Watch Watch App";
-			productReference = 58217A6B3031DFF3005F5C1F /* movair Watch Watch App.app */;
+			productName = "GoWays Watch Watch App";
+			productReference = 58217A6B3031DFF3005F5C1F /* GoWays Watch Watch App.app */;
 			productType = "com.apple.product-type.application";
 		};
-		76B27478302CADCE00645351 /* movair */ = {
+		76B27478302CADCE00645351 /* GoWays */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 76B27484302CADCF00645351 /* Build configuration list for PBXNativeTarget "movair" */;
+			buildConfigurationList = 76B27484302CADCF00645351 /* Build configuration list for PBXNativeTarget "GoWays" */;
 			buildPhases = (
 				76B27475302CADCE00645351 /* Sources */,
 				76B27476302CADCE00645351 /* Frameworks */,
@@ -141,13 +141,13 @@
 				58217A743031DFF4005F5C1F /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				76B2747B302CADCE00645351 /* movair */,
+				76B2747B302CADCE00645351 /* GoWays */,
 			);
-			name = movair;
+			name = GoWays;
 			packageProductDependencies = (
 			);
-			productName = movair;
-			productReference = 76B27479302CADCE00645351 /* movair.app */;
+			productName = GoWays;
+			productReference = 76B27479302CADCE00645351 /* GoWays.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -168,7 +168,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 76B27474302CADCE00645351 /* Build configuration list for PBXProject "movair" */;
+			buildConfigurationList = 76B27474302CADCE00645351 /* Build configuration list for PBXProject "Goways" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -182,8 +182,8 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				76B27478302CADCE00645351 /* movair */,
-				58217A6A3031DFF3005F5C1F /* movair Watch Watch App */,
+				76B27478302CADCE00645351 /* GoWays */,
+				58217A6A3031DFF3005F5C1F /* GoWays Watch Watch App */,
 			);
 		};
 /* End PBXProject section */
@@ -225,7 +225,7 @@
 /* Begin PBXTargetDependency section */
 		58217A743031DFF4005F5C1F /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 58217A6A3031DFF3005F5C1F /* movair Watch Watch App */;
+			target = 58217A6A3031DFF3005F5C1F /* GoWays Watch Watch App */;
 			targetProxy = 58217A733031DFF4005F5C1F /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -236,24 +236,24 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "movair Watch App/movairWatchApp.entitlements";
+				CODE_SIGN_ENTITLEMENTS = "GoWays Watch App/GoWaysWatchApp.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 8QT63UDSK5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = movair;
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Movair uses your heart rate during rides to estimate air intake.";
-				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Movair temporarily starts a cycling workout to read your heart rate during navigation.";
+				INFOPLIST_KEY_CFBundleDisplayName = GoWays;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "GoWays uses your heart rate during rides to estimate air intake.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "GoWays temporarily starts a cycling workout to read your heart rate during navigation.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.sweetseventeen.movair.ios;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.sweetseventeen.goways.ios;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.sweetseventeen.movair.ios.watchkitapp;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sweetseventeen.goways.ios.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
@@ -273,24 +273,24 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "movair Watch App/movairWatchApp.entitlements";
+				CODE_SIGN_ENTITLEMENTS = "GoWays Watch App/GoWaysWatchApp.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 8QT63UDSK5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = movair;
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Movair uses your heart rate during rides to estimate air intake.";
-				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Movair temporarily starts a cycling workout to read your heart rate during navigation.";
+				INFOPLIST_KEY_CFBundleDisplayName = GoWays;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "GoWays uses your heart rate during rides to estimate air intake.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "GoWays temporarily starts a cycling workout to read your heart rate during navigation.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
-				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.sweetseventeen.movair.ios;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.sweetseventeen.goways.ios;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.sweetseventeen.movair.ios.watchkitapp;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sweetseventeen.goways.ios.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
 				SKIP_INSTALL = YES;
@@ -307,7 +307,7 @@
 		};
 		76B27482302CADCF00645351 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReferenceAnchor = 76B2747B302CADCE00645351 /* movair */;
+			baseConfigurationReferenceAnchor = 76B2747B302CADCE00645351 /* GoWays */;
 			baseConfigurationReferenceRelativePath = Secrets.xcconfig;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -373,7 +373,7 @@
 		};
 		76B27483302CADCF00645351 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReferenceAnchor = 76B2747B302CADCE00645351 /* movair */;
+			baseConfigurationReferenceAnchor = 76B2747B302CADCE00645351 /* GoWays */;
 			baseConfigurationReferenceRelativePath = Secrets.xcconfig;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -432,22 +432,23 @@
 		};
 		76B27485302CADCF00645351 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReferenceAnchor = 76B2747B302CADCE00645351 /* movair */;
+			baseConfigurationReferenceAnchor = 76B2747B302CADCE00645351 /* GoWays */;
 			baseConfigurationReferenceRelativePath = Secrets.xcconfig;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = movair/movair.entitlements;
+				CODE_SIGN_ENTITLEMENTS = GoWays/GoWays.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 8QT63UDSK5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = movair/Info.plist;
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Movair uses your heart rate, age, sex, and height to estimate how much air you breathe during a ride, for more accurate pollution exposure calculations.";
-				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Movair records your route during an active ride, including while the app is in the background.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Movair uses your location to determine your current position.";
+				INFOPLIST_FILE = GoWays/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = GoWays;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "GoWays uses your heart rate, age, sex, and height to estimate how much air you breathe during a ride, for more accurate pollution exposure calculations.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "GoWays records your route during an active ride, including while the app is in the background.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "GoWays uses your location to determine your current position.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UIBackgroundModes = location;
@@ -459,7 +460,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.sweetseventeen.movair.ios;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sweetseventeen.goways.ios;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -474,22 +475,23 @@
 		};
 		76B27486302CADCF00645351 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReferenceAnchor = 76B2747B302CADCE00645351 /* movair */;
+			baseConfigurationReferenceAnchor = 76B2747B302CADCE00645351 /* GoWays */;
 			baseConfigurationReferenceRelativePath = Secrets.xcconfig;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = movair/movair.entitlements;
+				CODE_SIGN_ENTITLEMENTS = GoWays/GoWays.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 8QT63UDSK5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = movair/Info.plist;
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Movair uses your heart rate, age, sex, and height to estimate how much air you breathe during a ride, for more accurate pollution exposure calculations.";
-				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Movair records your route during an active ride, including while the app is in the background.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Movair uses your location to determine your current position.";
+				INFOPLIST_FILE = GoWays/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = GoWays;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "GoWays uses your heart rate, age, sex, and height to estimate how much air you breathe during a ride, for more accurate pollution exposure calculations.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "GoWays records your route during an active ride, including while the app is in the background.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "GoWays uses your location to determine your current position.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UIBackgroundModes = location;
@@ -501,7 +503,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.sweetseventeen.movair.ios;
+				PRODUCT_BUNDLE_IDENTIFIER = com.sweetseventeen.goways.ios;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -517,7 +519,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		58217A763031DFF4005F5C1F /* Build configuration list for PBXNativeTarget "movair Watch Watch App" */ = {
+		58217A763031DFF4005F5C1F /* Build configuration list for PBXNativeTarget "GoWays Watch Watch App" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				58217A773031DFF4005F5C1F /* Debug */,
@@ -526,7 +528,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		76B27474302CADCE00645351 /* Build configuration list for PBXProject "movair" */ = {
+		76B27474302CADCE00645351 /* Build configuration list for PBXProject "Goways" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				76B27482302CADCF00645351 /* Debug */,
@@ -535,7 +537,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		76B27484302CADCF00645351 /* Build configuration list for PBXNativeTarget "movair" */ = {
+		76B27484302CADCF00645351 /* Build configuration list for PBXNativeTarget "GoWays" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				76B27485302CADCF00645351 /* Debug */,

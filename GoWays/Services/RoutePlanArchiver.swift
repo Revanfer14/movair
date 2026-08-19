@@ -5,9 +5,9 @@ protocol RoutePlanArchiving: Sendable {
 }
 
 final class RoutePlanArchiver: RoutePlanArchiving {
-    private let api: MovairAPI
+    private let api: GoWaysAPI
 
-    init(api: MovairAPI = MovairAPIClient()) {
+    init(api: GoWaysAPI = GoWaysAPIClient()) {
         self.api = api
     }
 

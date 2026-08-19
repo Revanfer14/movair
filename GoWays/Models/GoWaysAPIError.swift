@@ -1,6 +1,6 @@
 import Foundation
 
-enum MovairAPIError: Error, Equatable {
+enum GoWaysAPIError: Error, Equatable {
     case missingBaseURL
     case invalidRequest
     case invalidInputValue

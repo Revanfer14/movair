@@ -1,6 +1,6 @@
 //
 //  PhoneConnectivityManager.swift
-//  movair
+//  GoWays
 //
 //  Created by Jonathan Basuki on 16/08/26.
 //

@@ -1,12 +1,12 @@
 import Foundation
 
-protocol MovairAPI: Sendable {
+protocol GoWaysAPI: Sendable {
     func predict(rows: [PredictRow]) async throws -> PredictResponse
     func archiveRoutePlan(_ payload: RoutePlanPayload) async throws
     func archiveRideRecord(bodyData: Data) async throws
 }
 
-final class MovairAPIClient: MovairAPI {
+final class GoWaysAPIClient: GoWaysAPI {
     private static let requestTimeout: TimeInterval = 15
 
     private let session: URLSession
@@ -24,7 +24,7 @@ final class MovairAPIClient: MovairAPI {
         do {
             return try JSONDecoder().decode(PredictResponse.self, from: data)
         } catch {
-            throw MovairAPIError.decodingFailed
+            throw GoWaysAPIError.decodingFailed
         }
     }
 
@@ -44,7 +44,7 @@ final class MovairAPIClient: MovairAPI {
         guard let baseURLString = Bundle.main.object(forInfoDictionaryKey: "SERVER_BASE_URL") as? String,
               !baseURLString.isEmpty,
               let baseURL = URL(string: baseURLString) else {
-            throw MovairAPIError.missingBaseURL
+            throw GoWaysAPIError.missingBaseURL
         }
 
         var request = URLRequest(url: baseURL.appendingPathComponent(path), timeoutInterval: Self.requestTimeout)
@@ -62,13 +62,13 @@ final class MovairAPIClient: MovairAPI {
         do {
             (data, response) = try await session.data(for: request)
         } catch let error as URLError where error.code == .timedOut {
-            throw MovairAPIError.timedOut
+            throw GoWaysAPIError.timedOut
         } catch {
-            throw MovairAPIError.requestFailed(statusCode: 0)
+            throw GoWaysAPIError.requestFailed(statusCode: 0)
         }
 
         guard let httpResponse = response as? HTTPURLResponse else {
-            throw MovairAPIError.requestFailed(statusCode: 0)
+            throw GoWaysAPIError.requestFailed(statusCode: 0)
         }
 
         switch httpResponse.statusCode {
@@ -77,18 +77,18 @@ final class MovairAPIClient: MovairAPI {
         case 400:
             throw decodedInputError(from: data) ?? .invalidRequest
         case 404:
-            throw MovairAPIError.notFound
+            throw GoWaysAPIError.notFound
         case 429:
             let retryAfter = (httpResponse.value(forHTTPHeaderField: "Retry-After")).flatMap(Int.init) ?? 60
-            throw MovairAPIError.rateLimited(retryAfterSeconds: retryAfter)
+            throw GoWaysAPIError.rateLimited(retryAfterSeconds: retryAfter)
         case 503:
-            throw MovairAPIError.serviceUnavailable
+            throw GoWaysAPIError.serviceUnavailable
         default:
-            throw MovairAPIError.requestFailed(statusCode: httpResponse.statusCode)
+            throw GoWaysAPIError.requestFailed(statusCode: httpResponse.statusCode)
         }
     }
 
-    private func decodedInputError(from data: Data) -> MovairAPIError? {
+    private func decodedInputError(from data: Data) -> GoWaysAPIError? {
         struct ServerError: Decodable { let error: String }
         guard let decoded = try? JSONDecoder().decode(ServerError.self, from: data) else {
             return nil

@@ -8,11 +8,11 @@ protocol RideRecordArchiving: Sendable {
 final class RideRecordArchiver: RideRecordArchiving {
     static let shared = RideRecordArchiver()
 
-    private let api: MovairAPI
+    private let api: GoWaysAPI
     private let fileManager: FileManager
     private let pendingDirectoryURL: URL
 
-    init(api: MovairAPI = MovairAPIClient(), fileManager: FileManager = .default) {
+    init(api: GoWaysAPI = GoWaysAPIClient(), fileManager: FileManager = .default) {
         self.api = api
         self.fileManager = fileManager
         let directory = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first

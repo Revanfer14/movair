@@ -3,10 +3,10 @@ internal import _LocationEssentials
 
 
 final class RemotePMPredictor: PMPredicting, @unchecked Sendable {
-    private let api: MovairAPI
+    private let api: GoWaysAPI
     private(set) var modelVersion: String?
 
-    init(api: MovairAPI = MovairAPIClient()) {
+    init(api: GoWaysAPI = GoWaysAPIClient()) {
         self.api = api
     }
 
@@ -39,7 +39,7 @@ final class RemotePMPredictor: PMPredicting, @unchecked Sendable {
         let response: PredictResponse
         do {
             response = try await api.predict(rows: rows)
-        } catch let error as MovairAPIError {
+        } catch let error as GoWaysAPIError {
             switch error {
             case .rateLimited, .serviceUnavailable, .timedOut:
                 throw ExposureEstimationError.unavailableData
