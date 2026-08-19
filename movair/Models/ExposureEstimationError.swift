@@ -9,13 +9,13 @@ enum ExposureEstimationError: Error {
     var userMessage: String {
         switch self {
         case .invalidRoute:
-            return "Rute tidak memiliki data lokasi yang cukup untuk dihitung."
+            return "This route doesn't have enough location data to calculate."
         case .routeOutsideValidatedCoverage:
-            return "Rute melewati area di luar cakupan perhitungan yang divalidasi."
+            return "This route passes through an area outside our validated coverage."
         case .unavailableData:
-            return "Data kualitas udara sedang tidak tersedia. Silakan coba lagi."
+            return "Air quality data is currently unavailable. Please try again."
         case .modelPredictionFailed:
-            return "Prediksi paparan tidak dapat dihitung saat ini."
+            return "Exposure prediction couldn't be calculated right now."
         }
     }
 }

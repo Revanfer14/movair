@@ -20,11 +20,13 @@ final class RouteSelectionViewModel: ObservableObject {
     }
 
     private let routingService: ORSRouting
+    private let reverseGeocoder: ReverseGeocoding
     private var exposureEstimator: RouteExposureEstimating?
     private let debounceDelay: Duration = .milliseconds(300)
     private var originCoordinate: CLLocationCoordinate2D?
     private var userLocationCoordinate: CLLocationCoordinate2D?
     private var routeTask: Task<Void, Never>?
+    private var reverseGeocodeTask: Task<Void, Never>?
     private var lastEstimationResult: RouteExposureEstimationResult?
     private var lastOrigin: CLLocationCoordinate2D?
     private var lastDestination: SelectedDestination?
@@ -32,9 +34,11 @@ final class RouteSelectionViewModel: ObservableObject {
 
     init(
         routingService: ORSRouting = ORSRoutingService(),
+        reverseGeocoder: ReverseGeocoding = ReverseGeocodingService(),
         exposureEstimator: RouteExposureEstimating? = nil
     ) {
         self.routingService = routingService
+        self.reverseGeocoder = reverseGeocoder
         self.exposureEstimator = exposureEstimator
     }
 
@@ -44,6 +48,7 @@ final class RouteSelectionViewModel: ObservableObject {
         self.destination = destination
         originTitle = "Current location"
         originIsCurrentLocation = true
+        resolveCurrentLocationTitle(for: origin)
         regenerateRoutes()
     }
 
@@ -80,7 +85,18 @@ final class RouteSelectionViewModel: ObservableObject {
         originTitle = "Current location"
         originCoordinate = coordinate
         originIsCurrentLocation = true
+        resolveCurrentLocationTitle(for: coordinate)
         regenerateRoutes()
+    }
+
+    private func resolveCurrentLocationTitle(for coordinate: CLLocationCoordinate2D?) {
+        reverseGeocodeTask?.cancel()
+        guard let coordinate else { return }
+        reverseGeocodeTask = Task { [weak self] in
+            guard let self, let name = try? await self.reverseGeocoder.placeName(for: coordinate) else { return }
+            guard !Task.isCancelled, self.originIsCurrentLocation else { return }
+            self.originTitle = name
+        }
     }
 
     func updateDestination(to place: SelectedDestination) {

@@ -183,8 +183,8 @@ struct TripSummaryView: View {
 
     private var traceCaption: String {
         trip.hasActualTrace
-            ? "Rute jejak GPS selama gowes"
-            : "Rencana rute — jejak GPS belum tersedia"
+            ? "GPS trace recorded during your ride"
+            : "Planned route — GPS trace not available"
     }
 
     private var exposureValueColor: Color {

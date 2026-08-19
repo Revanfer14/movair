@@ -15,25 +15,25 @@ enum MovairAPIError: Error, Equatable {
     var userMessage: String {
         switch self {
         case .missingBaseURL:
-            return "Konfigurasi server belum lengkap. Hubungi pengembang aplikasi."
+            return "Server configuration is incomplete. Contact the app developer."
         case .invalidRequest:
-            return "Permintaan tidak valid."
+            return "Invalid request."
         case .invalidInputValue:
-            return "Nilai input tidak valid."
+            return "Invalid input value."
         case .payloadTooLarge:
-            return "Permintaan terlalu besar."
+            return "Request is too large."
         case .notFound:
-            return "Data tidak ditemukan."
+            return "Data not found."
         case .rateLimited:
-            return "Terlalu banyak permintaan, coba lagi sebentar."
+            return "Too many requests — try again shortly."
         case .serviceUnavailable:
-            return "Layanan lagi gangguan, coba lagi."
+            return "The service is having issues, please try again."
         case .requestFailed:
-            return "Layanan lagi gangguan, coba lagi."
+            return "The service is having issues, please try again."
         case .decodingFailed:
-            return "Respons server tidak dapat dibaca."
+            return "The server's response couldn't be read."
         case .timedOut:
-            return "Koneksi ke server terlalu lama. Silakan coba lagi."
+            return "The connection to the server timed out. Please try again."
         }
     }
 }
