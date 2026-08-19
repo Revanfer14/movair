@@ -98,6 +98,8 @@ struct MapViewComponent: UIViewRepresentable {
     var centerCoordinate: CLLocationCoordinate2D?
     var showsUserLocation: Bool = true
     var routeCoordinates: [CLLocationCoordinate2D] = []
+    var displayedRouteCoordinates: [CLLocationCoordinate2D]? = nil
+    var isOffRoute: Bool = false
     var plannedRouteCoordinates: [CLLocationCoordinate2D] = []
     var isTraceMeasured: Bool = true
     var breaksTraceAtGaps: Bool = false
@@ -284,15 +286,10 @@ struct MapViewComponent: UIViewRepresentable {
         let connectorOverlays = mapView.overlays.filter { $0 is DottedConnectorPolyline }
         mapView.removeOverlays(connectorOverlays)
 
-        if isNavigationTracking, let userCoord = centerCoordinate, let firstRouteCoord = routeCoordinates.first {
-            let userLoc = CLLocation(latitude: userCoord.latitude, longitude: userCoord.longitude)
-            let startLoc = CLLocation(latitude: firstRouteCoord.latitude, longitude: firstRouteCoord.longitude)
-            let distanceToStart = userLoc.distance(from: startLoc)
-
-            if distanceToStart > 10 {
-                let connector = DottedConnectorPolyline(coordinates: [userCoord, firstRouteCoord], count: 2)
-                mapView.addOverlay(connector)
-            }
+        if isNavigationTracking, isOffRoute, let userCoord = centerCoordinate,
+           let anchorCoord = (displayedRouteCoordinates ?? routeCoordinates).first {
+            let connector = DottedConnectorPolyline(coordinates: [userCoord, anchorCoord], count: 2)
+            mapView.addOverlay(connector)
         }
     }
 
@@ -319,7 +316,8 @@ struct MapViewComponent: UIViewRepresentable {
                 mapView.addOverlay(planned)
             }
 
-            let runs = breaksTraceAtGaps ? RouteTraceSplitter.splitAtGaps(routeCoordinates) : [routeCoordinates]
+            let traceCoordinates = displayedRouteCoordinates ?? routeCoordinates
+            let runs = breaksTraceAtGaps ? RouteTraceSplitter.splitAtGaps(traceCoordinates) : [traceCoordinates]
             for run in runs where run.count >= 2 {
                 let polyline = TracePolyline(coordinates: run, count: run.count)
                 polyline.isMeasured = isTraceMeasured
@@ -329,15 +327,16 @@ struct MapViewComponent: UIViewRepresentable {
     }
 
     private func routeOverlayKey() -> String {
-        "\(effectiveRouteKey())_\(isNavigationTracking)_\(plannedRouteCoordinates.count)_\(isTraceMeasured)_\(breaksTraceAtGaps)"
+        let displayedRouteKey = displayedRouteCoordinates.map(polylineFingerprint) ?? "nil"
+        return "\(effectiveRouteKey())_\(isNavigationTracking)_\(plannedRouteCoordinates.count)_\(isTraceMeasured)_\(breaksTraceAtGaps)_\(displayedRouteKey)"
     }
 
     private func updateAnnotations(on mapView: MKMapView) {
         let existing = mapView.annotations.filter { !($0 is MKUserLocation) }
         mapView.removeAnnotations(existing)
 
-        if isNavigationTracking, let firstCoord = routeCoordinates.first {
-            let startAnnotation = RouteStartAnnotation(coordinate: firstCoord)
+        if isNavigationTracking, isOffRoute, let anchorCoord = (displayedRouteCoordinates ?? routeCoordinates).first {
+            let startAnnotation = RouteStartAnnotation(coordinate: anchorCoord)
             mapView.addAnnotation(startAnnotation)
         }
 

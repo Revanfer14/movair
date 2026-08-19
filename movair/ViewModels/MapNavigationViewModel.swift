@@ -67,6 +67,7 @@ final class MapNavigationViewModel: ObservableObject {
     @Published var isOffRoute: Bool = false
     @Published var unattributedDurationMinutes: Int = 0
     @Published var routeCoordinates: [CLLocationCoordinate2D] = []
+    @Published var remainingRouteCoordinates: [CLLocationCoordinate2D] = []
     @Published var originCoordinate: CLLocationCoordinate2D?
     @Published var destinationCoordinate: CLLocationCoordinate2D?
     @Published var originTitle: String = "Current location"
@@ -79,6 +80,7 @@ final class MapNavigationViewModel: ObservableObject {
     @Published private(set) var routeHeadingDegrees: Double?
     private(set) var lastRideRecordPayload: RideRecordPayload?
 
+    private let routePolylineTrimmer: RoutePolylineTrimming = RoutePolylineTrimmer()
     private var rideTracker: RideTracker?
     private var doseSession: LiveRideDoseSession?
     private var latestTrackingSnapshot: RideTrackingSnapshot?
@@ -133,6 +135,7 @@ final class MapNavigationViewModel: ObservableObject {
         }
         startedAt = Date()
         routeCoordinates = route.coordinates
+        remainingRouteCoordinates = route.coordinates
         isTrackingPaused = false
         distanceKm = 0
         durationMinutes = 0
@@ -229,6 +232,10 @@ final class MapNavigationViewModel: ObservableObject {
         let snapshot = rideTracker.process(location: location)
         latestTrackingSnapshot = snapshot
         applyTrackingMetrics(snapshot)
+        remainingRouteCoordinates = routePolylineTrimmer.remainingCoordinates(
+            from: routeCoordinates,
+            traveledDistanceMeters: snapshot.matchedRouteDistanceMeters
+        )
         updateInstructionProgress(with: location)
         updateRouteHeading(with: location)
         scheduleDoseUpdate(for: snapshot)

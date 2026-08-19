@@ -13,6 +13,7 @@ final class RideTracker {
     private var unattributedDuration: TimeInterval = 0
     private var travelledDistanceMeters: Double = 0
     private var isOffRoute = false
+    private var matchedRouteDistanceMeters: Double = 0
     private var travelledTracePoints: [RideTracePoint] = []
     private var lastTraceLocation: CLLocation?
     private var traceSpacingMeters = DoseConstants.traceMinimumSpacingMeters
@@ -44,6 +45,7 @@ final class RideTracker {
         }
 
         isOffRoute = match.distanceToRouteMeters > DoseConstants.offRouteDistanceMeters
+        matchedRouteDistanceMeters = match.routeDistanceMeters
         let matchedIndex = segmentIndex(for: match.routeDistanceMeters)
         accumulate(elapsed: delta, toward: matchedIndex, routeDistanceMeters: match.routeDistanceMeters)
         return snapshot()
@@ -57,6 +59,7 @@ final class RideTracker {
             travelledDistanceMeters: travelledDistanceMeters,
             isOffRoute: isOffRoute,
             activeSegmentIndex: activeSegmentIndex,
+            matchedRouteDistanceMeters: matchedRouteDistanceMeters,
             interpolatedSegmentFlags: interpolatedSegmentFlags,
             travelledCoordinates: travelledCoordinates,
             travelledTracePoints: travelledTracePoints

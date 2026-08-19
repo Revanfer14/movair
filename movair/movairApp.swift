@@ -13,7 +13,7 @@ struct movairApp: App {
 
     var body: some Scene {
         WindowGroup {
-            AppTabView()
+            RootView()
         }
     }
 }
