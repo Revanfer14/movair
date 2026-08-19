@@ -4,29 +4,18 @@
 
 GoWays is an iOS navigation app built for cyclists in Jabodetabek (Greater Jakarta) that ranks routes by **estimated PM2.5 exposure dose** — not travel time — then measures your actual dose while you ride.
 
-![Platform](https://img.shields.io/badge/platform-iOS%20%7C%20watchOS-lightgrey)
-![Swift](https://img.shields.io/badge/Swift-SwiftUI-orange)
-![CoreML](https://img.shields.io/badge/ML-CoreML-blue)
-![HealthKit](https://img.shields.io/badge/HealthKit-HR%20based%20VE-red)
-![Status](https://img.shields.io/badge/status-in%20development-yellow)
-
 ---
 
-## 🎬 Demo
-
-<video  src="./readme.docs/screenrec-demo-c5.MP4" controls muted></video>
-
----
-
-### Share your ride
-
-Post-ride summary, shareable Strava-style.
+## 🎬 App Overview
 
 <p align="center">
-<img src="./readme.docs/IMG_3301.PNG" width="45%" alt="Shareable trip sum
-mary card" />
-  <img src="./readme.docs/IMG_3293.JPG" width="45%" alt="Trip summary scree
-n" />
+  <img src="./readme.docs/Screenshot 2026-08-19 at 22.46.29.png" width="45%" alt="Planning mode: routes ranked by estimated exposure, not just distance" />
+  <img src="./readme.docs/IMG_3304.PNG" width="45%" alt="Weekly exposure dashboard and ride history" />
+  
+</p>
+<p align="center">
+  <img src="./readme.docs/IMG_3301.PNG" width="45%" alt="Post-ride trip summary with measured exposure" />
+  <img src="./readme.docs/IMG_3293.JPG" width="45%" alt="Shareable ride summary card" />
 </p>
 
 ---
@@ -101,20 +90,6 @@ The division of labor is deliberate: a CoreML model produces the absolute dose n
 </tr>
 </table>
 
-Project structure:
-
-```
-GoWays/
-├── Extensions/     Color+, Font+, and other Apple-type extensions
-├── Components/     Small reusable views
-├── Models/         Pure data structs/enums
-├── Services/       Networking, CoreML, GPS, dose calculations
-├── ViewModels/     State + orchestration
-└── Views/          Screen-level SwiftUI views
-```
-
-Full data flow, critical contracts, and dose formulas live in [`CLAUDE.md`](./CLAUDE.md) and [`RUMUS.md`](./RUMUS.md).
-
 ---
 
 ## ⚠️ Known limitations
@@ -123,11 +98,9 @@ Full data flow, critical contracts, and dose formulas live in [`CLAUDE.md`](./CL
 - The model and road data only cover **Jabodetabek**. Anything outside that is extrapolation.
 - Planning mode numbers are **estimates**, not measurements — that's why the UI shows ranges/categories rather than precise figures.
 
-Full details in `CLAUDE.md` §6.
-
 ---
 
-## 👥 Team
+## 👥 Team Sweetseventeen
 
 Built by:
 
