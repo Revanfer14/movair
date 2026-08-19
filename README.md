@@ -6,7 +6,7 @@ GoWays is an iOS navigation app built for cyclists in Jabodetabek (Greater Jakar
 
 ---
 
-## 🎬 App Overview
+## 📱 App Overview
 
 <p align="center">
   <img src="./readme.docs/Screenshot 2026-08-19 at 22.46.29.png" width="45%" alt="Planning mode: routes ranked by estimated exposure, not just distance" />
