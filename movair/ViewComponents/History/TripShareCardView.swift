@@ -55,9 +55,9 @@ struct TripShareCardView: View {
                 .padding(.top, 8)
 
                 (
-                    Text("Rute ini menghabiskan ") +
+                    Text("This route costs ") +
                     Text("\(trip.dailyExposurePercent)%").bold() +
-                    Text(" kuota napas bersih harianmu")
+                    Text(" of your daily clean air quota.")
                 )
                     .font(Font.Brand.footnote)
                     .foregroundStyle(Color.Brand.darkgray)

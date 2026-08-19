@@ -21,7 +21,7 @@ struct ActiveNavigationView: View {
                 showsUserLocation: true,
                 routeCoordinates: viewModel.routeCoordinates,
                 displayedRouteCoordinates: viewModel.remainingRouteCoordinates,
-                isOffRoute: viewModel.isOffRoute,
+                guideAnchorCoordinate: viewModel.guideAnchorCoordinate,
                 originCoordinate: viewModel.originCoordinate,
                 destinationCoordinate: viewModel.destinationCoordinate,
                 fitsRouteInView: false,

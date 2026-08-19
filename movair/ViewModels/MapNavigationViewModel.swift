@@ -68,6 +68,7 @@ final class MapNavigationViewModel: ObservableObject {
     @Published var unattributedDurationMinutes: Int = 0
     @Published var routeCoordinates: [CLLocationCoordinate2D] = []
     @Published var remainingRouteCoordinates: [CLLocationCoordinate2D] = []
+    @Published private(set) var guideAnchorCoordinate: CLLocationCoordinate2D?
     @Published var originCoordinate: CLLocationCoordinate2D?
     @Published var destinationCoordinate: CLLocationCoordinate2D?
     @Published var originTitle: String = "Current location"
@@ -84,6 +85,8 @@ final class MapNavigationViewModel: ObservableObject {
     private var rideTracker: RideTracker?
     private var doseSession: LiveRideDoseSession?
     private var latestTrackingSnapshot: RideTrackingSnapshot?
+    private var hasJoinedRoute = false
+    private var isShowingRejoinGuide = false
     private var latestDoseMicrograms: Double = 0
     private var elapsedDurationSeconds: TimeInterval = 0
     private var isTrackingPaused = false
@@ -136,6 +139,9 @@ final class MapNavigationViewModel: ObservableObject {
         startedAt = Date()
         routeCoordinates = route.coordinates
         remainingRouteCoordinates = route.coordinates
+        guideAnchorCoordinate = route.coordinates.first
+        hasJoinedRoute = false
+        isShowingRejoinGuide = false
         isTrackingPaused = false
         distanceKm = 0
         durationMinutes = 0
@@ -232,10 +238,7 @@ final class MapNavigationViewModel: ObservableObject {
         let snapshot = rideTracker.process(location: location)
         latestTrackingSnapshot = snapshot
         applyTrackingMetrics(snapshot)
-        remainingRouteCoordinates = routePolylineTrimmer.remainingCoordinates(
-            from: routeCoordinates,
-            traveledDistanceMeters: snapshot.matchedRouteDistanceMeters
-        )
+        updateRouteGuidance(with: snapshot)
         updateInstructionProgress(with: location)
         updateRouteHeading(with: location)
         scheduleDoseUpdate(for: snapshot)
@@ -403,6 +406,30 @@ final class MapNavigationViewModel: ObservableObject {
         averageSpeedKmh = distanceKm / (snapshot.elapsedDuration / 3600)
     }
 
+    private func updateRouteGuidance(with snapshot: RideTrackingSnapshot) {
+        if snapshot.distanceToRouteMeters <= DoseConstants.routeJoinDistanceMeters {
+            hasJoinedRoute = true
+            isShowingRejoinGuide = false
+        } else if hasJoinedRoute && snapshot.distanceToRouteMeters > DoseConstants.offRouteDistanceMeters {
+            isShowingRejoinGuide = true
+        }
+
+        remainingRouteCoordinates = hasJoinedRoute
+            ? routePolylineTrimmer.remainingCoordinates(
+                from: routeCoordinates,
+                traveledDistanceMeters: snapshot.matchedRouteDistanceMeters
+            )
+            : routeCoordinates
+
+        if !hasJoinedRoute {
+            guideAnchorCoordinate = routeCoordinates.first
+        } else if isShowingRejoinGuide {
+            guideAnchorCoordinate = snapshot.projectedCoordinate
+        } else {
+            guideAnchorCoordinate = nil
+        }
+    }
+
     private func updateInstructionProgress(with location: CLLocation) {
         guard instructions.indices.contains(currentInstructionIndex) else { return }
 
@@ -524,7 +551,6 @@ final class MapNavigationViewModel: ObservableObject {
                     self.latestDoseMicrograms = liveDose.doseMicrograms
                     self.accumulatedExposureUg = max(0, Int(liveDose.doseMicrograms.rounded()))
                     self.exposureLevel = ExposureLevel.from(exposureUg: self.accumulatedExposureUg)
-                    self.isOffRoute = liveDose.isOffRoute
                     self.unattributedDurationMinutes = Int(
                         (liveDose.unattributedDurationSeconds / 60).rounded()
                     )

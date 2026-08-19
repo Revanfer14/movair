@@ -14,6 +14,8 @@ final class RideTracker {
     private var travelledDistanceMeters: Double = 0
     private var isOffRoute = false
     private var matchedRouteDistanceMeters: Double = 0
+    private var distanceToRouteMeters: Double = 0
+    private var projectedCoordinate: CLLocationCoordinate2D?
     private var travelledTracePoints: [RideTracePoint] = []
     private var lastTraceLocation: CLLocation?
     private var traceSpacingMeters = DoseConstants.traceMinimumSpacingMeters
@@ -46,6 +48,8 @@ final class RideTracker {
 
         isOffRoute = match.distanceToRouteMeters > DoseConstants.offRouteDistanceMeters
         matchedRouteDistanceMeters = match.routeDistanceMeters
+        distanceToRouteMeters = match.distanceToRouteMeters
+        projectedCoordinate = match.projectedCoordinate
         let matchedIndex = segmentIndex(for: match.routeDistanceMeters)
         accumulate(elapsed: delta, toward: matchedIndex, routeDistanceMeters: match.routeDistanceMeters)
         return snapshot()
@@ -60,6 +64,8 @@ final class RideTracker {
             isOffRoute: isOffRoute,
             activeSegmentIndex: activeSegmentIndex,
             matchedRouteDistanceMeters: matchedRouteDistanceMeters,
+            distanceToRouteMeters: distanceToRouteMeters,
+            projectedCoordinate: projectedCoordinate,
             interpolatedSegmentFlags: interpolatedSegmentFlags,
             travelledCoordinates: travelledCoordinates,
             travelledTracePoints: travelledTracePoints
@@ -215,10 +221,15 @@ final class RideTracker {
         range.compactMap { index -> RouteMatch? in
             let segment = segments[index]
             let projection = projection(of: coordinate, onto: segment)
+            let projectedCoordinate = CLLocationCoordinate2D(
+                latitude: segment.start.latitude + (segment.end.latitude - segment.start.latitude) * projection.fraction,
+                longitude: segment.start.longitude + (segment.end.longitude - segment.start.longitude) * projection.fraction
+            )
             return RouteMatch(
                 routeDistanceMeters: segment.startDistanceMeters + segment.distanceMeters * projection.fraction,
                 distanceToRouteMeters: projection.distanceMeters,
-                segmentIndex: index
+                segmentIndex: index,
+                projectedCoordinate: projectedCoordinate
             )
         }
         .min { $0.distanceToRouteMeters < $1.distanceToRouteMeters }
@@ -250,5 +261,6 @@ final class RideTracker {
         let routeDistanceMeters: Double
         let distanceToRouteMeters: Double
         let segmentIndex: Int
+        let projectedCoordinate: CLLocationCoordinate2D
     }
 }
