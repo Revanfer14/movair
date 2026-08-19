@@ -15,9 +15,11 @@ struct HistoryView: View {
 
                 ridesSection
 
-                highlightsSection
-                    .padding(.horizontal, 16)
-                    .padding(.top, 24)
+                if !viewModel.highlights.isEmpty {
+                    highlightsSection
+                        .padding(.horizontal, 16)
+                        .padding(.top, 24)
+                }
 
                 aboutSection
                     .padding(.horizontal, 16)

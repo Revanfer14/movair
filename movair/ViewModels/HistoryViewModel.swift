@@ -9,9 +9,11 @@ final class HistoryViewModel: ObservableObject {
 
     let store: TripHistoryStore
     private let dailyBudgetUg: Int = 261
+    private let highlightGenerator: HistoryHighlightGenerating
 
-    init(store: TripHistoryStore = .shared) {
+    init(store: TripHistoryStore = .shared, highlightGenerator: HistoryHighlightGenerating = HistoryHighlightGenerator()) {
         self.store = store
+        self.highlightGenerator = highlightGenerator
         rebuildWeek(around: Date())
     }
 
@@ -45,16 +47,7 @@ final class HistoryViewModel: ObservableObject {
     }
 
     var highlights: [HistoryHighlight] {
-        [
-            HistoryHighlight(
-                systemImage: "chart.bar.fill",
-                text: "Your estimated exposure was 18% lower this week than last week"
-            ),
-            HistoryHighlight(
-                systemImage: "sun.max.fill",
-                text: "Morning rides had ~32% lower estimated exposure than your evening rides"
-            )
-        ]
+        highlightGenerator.makeHighlights(trips: store.trips, referenceDate: Date())
     }
 
     func selectDate(_ date: Date) {
