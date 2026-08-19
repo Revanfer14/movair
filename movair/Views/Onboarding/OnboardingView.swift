@@ -7,9 +7,9 @@ struct OnboardingWaveShape: Shape {
         let h = rect.height
 
         path.move(to: CGPoint(x: 0, y: 0))
-        path.addLine(to: CGPoint(x: 0, y: h - 70))
+        path.addLine(to: CGPoint(x: 0, y: h - 50))
         path.addCurve(
-            to: CGPoint(x: w * 0.55, y: h - 55),
+            to: CGPoint(x: w * 0.55, y: h - 50),
             control1: CGPoint(x: w * 0.05, y: h + 10),
             control2: CGPoint(x: w * 0.32, y: h + 10)
         )
