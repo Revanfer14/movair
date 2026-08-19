@@ -23,6 +23,14 @@ final class RouteStartAnnotation: NSObject, MKAnnotation {
     }
 }
 
+final class NavigationUserAnnotation: NSObject, MKAnnotation {
+    @objc dynamic var coordinate: CLLocationCoordinate2D
+
+    init(coordinate: CLLocationCoordinate2D) {
+        self.coordinate = coordinate
+    }
+}
+
 final class UserLocationAnnotationView: MKAnnotationView {
     private let arrowImageView = UIImageView()
     private let headingUnavailableDot = UIView()
@@ -128,7 +136,7 @@ struct MapViewComponent: UIViewRepresentable {
     func makeUIView(context: Context) -> MKMapView {
         let mapView = MKMapView()
         mapView.delegate = context.coordinator
-        mapView.showsUserLocation = showsUserLocation
+        mapView.showsUserLocation = isNavigationTracking ? false : showsUserLocation
         mapView.showsCompass = false
         mapView.pointOfInterestFilter = .includingAll
         mapView.isScrollEnabled = isInteractionEnabled
@@ -145,7 +153,7 @@ struct MapViewComponent: UIViewRepresentable {
     }
 
     func updateUIView(_ mapView: MKMapView, context: Context) {
-        mapView.showsUserLocation = showsUserLocation
+        mapView.showsUserLocation = isNavigationTracking ? false : showsUserLocation
         mapView.isScrollEnabled = isInteractionEnabled
         mapView.isZoomEnabled = isInteractionEnabled
         mapView.isPitchEnabled = isInteractionEnabled
@@ -153,11 +161,11 @@ struct MapViewComponent: UIViewRepresentable {
         context.coordinator.parent = self
 
         updateOverlays(on: mapView, context: context)
-        updateAnnotations(on: mapView)
+        updateAnnotations(on: mapView, context: context)
 
         if isNavigationTracking {
             let cameraHeading = updateNavigationCamera(on: mapView, context: context)
-            refreshUserLocationArrow(on: mapView, cameraHeading: cameraHeading)
+            refreshUserLocationArrow(on: mapView, coordinator: context.coordinator, cameraHeading: cameraHeading)
             return
         }
 
@@ -189,7 +197,7 @@ struct MapViewComponent: UIViewRepresentable {
             DispatchQueue.main.async { recenterTrigger = false }
         }
 
-        refreshUserLocationArrow(on: mapView, cameraHeading: mapView.camera.heading)
+        refreshUserLocationArrow(on: mapView, coordinator: context.coordinator, cameraHeading: mapView.camera.heading)
     }
 
     private func updateNavigationCamera(on mapView: MKMapView, context: Context) -> Double {
@@ -269,8 +277,9 @@ struct MapViewComponent: UIViewRepresentable {
         return nil
     }
 
-    private func refreshUserLocationArrow(on mapView: MKMapView, cameraHeading: Double) {
-        guard let userView = mapView.view(for: mapView.userLocation) as? UserLocationAnnotationView else { return }
+    private func refreshUserLocationArrow(on mapView: MKMapView, coordinator: Coordinator, cameraHeading: Double) {
+        let userAnnotation: MKAnnotation? = isNavigationTracking ? coordinator.navigationUserAnnotation : mapView.userLocation
+        guard let userAnnotation, let userView = mapView.view(for: userAnnotation) as? UserLocationAnnotationView else { return }
         userView.apply(deviceHeading: resolvedDeviceHeading(), cameraHeading: cameraHeading)
     }
 
@@ -331,9 +340,11 @@ struct MapViewComponent: UIViewRepresentable {
         return "\(effectiveRouteKey())_\(isNavigationTracking)_\(plannedRouteCoordinates.count)_\(isTraceMeasured)_\(breaksTraceAtGaps)_\(displayedRouteKey)"
     }
 
-    private func updateAnnotations(on mapView: MKMapView) {
-        let existing = mapView.annotations.filter { !($0 is MKUserLocation) }
+    private func updateAnnotations(on mapView: MKMapView, context: Context) {
+        let existing = mapView.annotations.filter { !($0 is MKUserLocation) && !($0 is NavigationUserAnnotation) }
         mapView.removeAnnotations(existing)
+
+        updateNavigationUserAnnotation(on: mapView, context: context)
 
         if isNavigationTracking, isOffRoute, let anchorCoord = (displayedRouteCoordinates ?? routeCoordinates).first {
             let startAnnotation = RouteStartAnnotation(coordinate: anchorCoord)
@@ -356,6 +367,26 @@ struct MapViewComponent: UIViewRepresentable {
                 title: "Destination"
             )
             mapView.addAnnotation(destination)
+        }
+    }
+
+    private func updateNavigationUserAnnotation(on mapView: MKMapView, context: Context) {
+        guard isNavigationTracking, let centerCoordinate else {
+            if let existing = context.coordinator.navigationUserAnnotation {
+                mapView.removeAnnotation(existing)
+                context.coordinator.navigationUserAnnotation = nil
+            }
+            return
+        }
+
+        if let existing = context.coordinator.navigationUserAnnotation {
+            UIView.animate(withDuration: 0.25, delay: 0, options: [.beginFromCurrentState, .curveLinear]) {
+                existing.coordinate = centerCoordinate
+            }
+        } else {
+            let annotation = NavigationUserAnnotation(coordinate: centerCoordinate)
+            context.coordinator.navigationUserAnnotation = annotation
+            mapView.addAnnotation(annotation)
         }
     }
 
@@ -436,6 +467,7 @@ struct MapViewComponent: UIViewRepresentable {
         var userHasDraggedMap = false
         var lastAppliedHeading: Double = 0
         var lastAppliedCenter: CLLocationCoordinate2D?
+        var navigationUserAnnotation: NavigationUserAnnotation?
 
         init(parent: MapViewComponent) {
             self.parent = parent
@@ -514,7 +546,7 @@ struct MapViewComponent: UIViewRepresentable {
         }
 
         func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
-            parent.refreshUserLocationArrow(on: mapView, cameraHeading: mapView.camera.heading)
+            parent.refreshUserLocationArrow(on: mapView, coordinator: self, cameraHeading: mapView.camera.heading)
         }
 
         func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
@@ -580,6 +612,15 @@ struct MapViewComponent: UIViewRepresentable {
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
             if annotation is MKUserLocation {
                 let id = "userLocation"
+                let userView = mapView.dequeueReusableAnnotationView(withIdentifier: id) as? UserLocationAnnotationView
+                    ?? UserLocationAnnotationView(annotation: annotation, reuseIdentifier: id)
+                userView.annotation = annotation
+                userView.apply(deviceHeading: parent.resolvedDeviceHeading(), cameraHeading: mapView.camera.heading)
+                return userView
+            }
+
+            if annotation is NavigationUserAnnotation {
+                let id = "navigationUserLocation"
                 let userView = mapView.dequeueReusableAnnotationView(withIdentifier: id) as? UserLocationAnnotationView
                     ?? UserLocationAnnotationView(annotation: annotation, reuseIdentifier: id)
                 userView.annotation = annotation

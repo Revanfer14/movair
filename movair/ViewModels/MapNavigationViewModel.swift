@@ -524,7 +524,6 @@ final class MapNavigationViewModel: ObservableObject {
                     self.latestDoseMicrograms = liveDose.doseMicrograms
                     self.accumulatedExposureUg = max(0, Int(liveDose.doseMicrograms.rounded()))
                     self.exposureLevel = ExposureLevel.from(exposureUg: self.accumulatedExposureUg)
-                    self.isOffRoute = liveDose.isOffRoute
                     self.unattributedDurationMinutes = Int(
                         (liveDose.unattributedDurationSeconds / 60).rounded()
                     )
