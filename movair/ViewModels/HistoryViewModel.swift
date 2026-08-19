@@ -10,6 +10,7 @@ final class HistoryViewModel: ObservableObject {
     let store: TripHistoryStore
     private let dailyBudgetUg: Int = 261
     private let highlightGenerator: HistoryHighlightGenerating
+    private let dailyBudgetUg: Int = 240
 
     init(store: TripHistoryStore = .shared, highlightGenerator: HistoryHighlightGenerating = HistoryHighlightGenerator()) {
         self.store = store

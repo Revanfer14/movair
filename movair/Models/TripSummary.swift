@@ -63,7 +63,7 @@ struct TripSummary: Identifiable, Equatable, Codable {
         exposureLevel: ExposureLevel,
         isMeasuredExposure: Bool = false,
         unattributedDurationMinutes: Int = 0,
-        dailyBudgetUg: Int = 261,
+        dailyBudgetUg: Int = 240,
         coordinates: [CLLocationCoordinate2D] = [],
         travelledCoordinates: [CLLocationCoordinate2D] = [],
         originCoordinate: CLLocationCoordinate2D? = nil,
@@ -109,7 +109,7 @@ struct TripSummary: Identifiable, Equatable, Codable {
         exposureLevel = try container.decode(ExposureLevel.self, forKey: .exposureLevel)
         isMeasuredExposure = try container.decodeIfPresent(Bool.self, forKey: .isMeasuredExposure) ?? false
         unattributedDurationMinutes = try container.decodeIfPresent(Int.self, forKey: .unattributedDurationMinutes) ?? 0
-        dailyBudgetUg = try container.decodeIfPresent(Int.self, forKey: .dailyBudgetUg) ?? 261
+        dailyBudgetUg = try container.decodeIfPresent(Int.self, forKey: .dailyBudgetUg) ?? 240
         completedAt = try container.decode(Date.self, forKey: .completedAt)
 
         let payloads = try container.decodeIfPresent([CoordinatePayload].self, forKey: .coordinates) ?? []
