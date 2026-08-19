@@ -286,11 +286,24 @@ struct MapViewComponent: UIViewRepresentable {
         let connectorOverlays = mapView.overlays.filter { $0 is DottedConnectorPolyline }
         mapView.removeOverlays(connectorOverlays)
 
-        if isNavigationTracking, isOffRoute, let userCoord = centerCoordinate,
-           let anchorCoord = (displayedRouteCoordinates ?? routeCoordinates).first {
+        if shouldShowStartIndicator(), let userCoord = centerCoordinate, let anchorCoord = anchorCoordinate() {
             let connector = DottedConnectorPolyline(coordinates: [userCoord, anchorCoord], count: 2)
             mapView.addOverlay(connector)
         }
+    }
+
+    private func anchorCoordinate() -> CLLocationCoordinate2D? {
+        (displayedRouteCoordinates ?? routeCoordinates).first
+    }
+
+    private func shouldShowStartIndicator() -> Bool {
+        guard isNavigationTracking, let userCoord = centerCoordinate, let anchorCoord = anchorCoordinate() else {
+            return false
+        }
+        if isOffRoute { return true }
+        let userLoc = CLLocation(latitude: userCoord.latitude, longitude: userCoord.longitude)
+        let anchorLoc = CLLocation(latitude: anchorCoord.latitude, longitude: anchorCoord.longitude)
+        return userLoc.distance(from: anchorLoc) > 10
     }
 
     private func addRouteOverlays(on mapView: MKMapView) {
@@ -335,7 +348,7 @@ struct MapViewComponent: UIViewRepresentable {
         let existing = mapView.annotations.filter { !($0 is MKUserLocation) }
         mapView.removeAnnotations(existing)
 
-        if isNavigationTracking, isOffRoute, let anchorCoord = (displayedRouteCoordinates ?? routeCoordinates).first {
+        if shouldShowStartIndicator(), let anchorCoord = anchorCoordinate() {
             let startAnnotation = RouteStartAnnotation(coordinate: anchorCoord)
             mapView.addAnnotation(startAnnotation)
         }
