@@ -171,12 +171,12 @@ struct TripSummary: Identifiable, Equatable, Codable {
         try container.encodeIfPresent(routePlanID, forKey: .routePlanID)
     }
 
-    var displayCoordinates: [CLLocationCoordinate2D] {
-        travelledCoordinates.count >= 2 ? travelledCoordinates : coordinates
+    var hasActualTrace: Bool {
+        travelledCoordinates.count >= 2 && distanceKm > 0
     }
 
-    var hasActualTrace: Bool {
-        travelledCoordinates.count >= 2
+    var displayCoordinates: [CLLocationCoordinate2D] {
+        hasActualTrace ? travelledCoordinates : coordinates
     }
 
     var dailyExposurePercent: Int {

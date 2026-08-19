@@ -610,9 +610,8 @@ struct MapViewComponent: UIViewRepresentable {
 
             if let planned = overlay as? PlannedRoutePolyline {
                 let renderer = MKPolylineRenderer(polyline: planned)
-                renderer.strokeColor = UIColor(Color.Brand.blue600.opacity(0.30))
+                renderer.strokeColor = .systemGray
                 renderer.lineWidth = 4.5
-                renderer.lineDashPattern = [2, 8]
                 renderer.lineCap = .round
                 renderer.lineJoin = .round
                 return renderer
@@ -624,9 +623,8 @@ struct MapViewComponent: UIViewRepresentable {
                     renderer.strokeColor = UIColor(Color.Brand.blue600)
                     renderer.lineWidth = 5.5
                 } else {
-                    renderer.strokeColor = UIColor(Color.Brand.blue600.opacity(0.45))
+                    renderer.strokeColor = .systemGray
                     renderer.lineWidth = 5.5
-                    renderer.lineDashPattern = [1, 10]
                 }
                 renderer.lineCap = .round
                 renderer.lineJoin = .round

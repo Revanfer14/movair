@@ -120,28 +120,27 @@ final class RouteMapSnapshotter: RouteMapSnapshotting {
             if hasTrace, plannedCoordinates.count >= 2 {
                 strokePath(
                     points: plannedCoordinates.map { snapshot.point(for: $0) },
-                    color: routeColor.withAlphaComponent(0.35),
+                    color: .systemGray,
                     lineWidth: 5,
-                    dashPattern: [3, 9]
+                    dashPattern: nil
                 )
             }
 
-            let markerPoints: [CGPoint]
-            if hasTrace {
-                let runs = RouteTraceSplitter.splitAtGaps(traceCoordinates)
-                for run in runs where run.count >= 2 {
-                    let points = run.map { snapshot.point(for: $0) }
-                    strokePath(points: points, color: .white.withAlphaComponent(0.9), lineWidth: 11, dashPattern: nil)
-                    strokePath(points: points, color: routeColor, lineWidth: 7, dashPattern: nil)
-                }
-                markerPoints = traceCoordinates.map { snapshot.point(for: $0) }
-            } else {
+            guard hasTrace else {
                 let points = plannedCoordinates.map { snapshot.point(for: $0) }
                 strokePath(points: points, color: .white.withAlphaComponent(0.9), lineWidth: 11, dashPattern: nil)
-                strokePath(points: points, color: routeColor.withAlphaComponent(0.55), lineWidth: 7, dashPattern: [4, 10])
-                markerPoints = points
+                strokePath(points: points, color: .systemGray, lineWidth: 7, dashPattern: nil)
+                return
             }
 
+            let runs = RouteTraceSplitter.splitAtGaps(traceCoordinates)
+            for run in runs where run.count >= 2 {
+                let points = run.map { snapshot.point(for: $0) }
+                strokePath(points: points, color: .white.withAlphaComponent(0.9), lineWidth: 11, dashPattern: nil)
+                strokePath(points: points, color: routeColor, lineWidth: 7, dashPattern: nil)
+            }
+
+            let markerPoints = traceCoordinates.map { snapshot.point(for: $0) }
             guard let firstPoint = markerPoints.first, let lastPoint = markerPoints.last else { return }
             drawStartMarker(at: firstPoint, color: routeColor, in: context.cgContext)
             drawFinishMarker(at: lastPoint, color: routeColor, in: context.cgContext)
