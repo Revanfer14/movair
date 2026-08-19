@@ -9,9 +9,18 @@ import SwiftUI
 
 @main
 struct movairApp: App {
+    @StateObject private var phoneConnectivity = PhoneConnectivityManager.shared
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding: Bool = false
+
     var body: some Scene {
         WindowGroup {
-            HomeView()
+            if hasCompletedOnboarding {
+                AppTabView()
+            } else {
+                OnboardingView {
+                    hasCompletedOnboarding = true
+                }
+            }
         }
     }
 }
