@@ -15,7 +15,7 @@ final class PhoneConnectivityManager: NSObject, ObservableObject {
     static let shared = PhoneConnectivityManager()
 
     private static let navigationUpdateMinInterval: TimeInterval = 1.0
-    private static let maxRoutePointsSentToWatch = 50
+    private static let maxRoutePointsSentToWatch = 300
 
     @Published private(set) var incomingAction: WCAction?
     @Published private(set) var latestHeartRateBPM: Double?
@@ -23,6 +23,7 @@ final class PhoneConnectivityManager: NSObject, ObservableObject {
     private var session: WCSession?
     private var lastSentPayload: WatchSessionPayload?
     private var lastSentAt: Date?
+    private let polylineSimplifier: PolylineSimplifying = PolylineSimplifier()
 
     private override init() {
         super.init()
@@ -124,21 +125,12 @@ final class PhoneConnectivityManager: NSObject, ObservableObject {
     func sendRouteCoordinates(_ coordinates: [CLLocationCoordinate2D]) {
         guard let session, session.activationState == .activated, !coordinates.isEmpty else { return }
 
-        let sampled = downsampled(coordinates, maxCount: Self.maxRoutePointsSentToWatch)
-        let points = sampled.map { [$0.latitude, $0.longitude] }
+        let simplified = polylineSimplifier.simplify(coordinates, maxPointCount: Self.maxRoutePointsSentToWatch)
+        let points = simplified.map { [$0.latitude, $0.longitude] }
         let message: [String: Any] = [
             WCKeys.routePoints: points
         ]
         session.transferUserInfo(message)
-    }
-
-    private func downsampled(_ coordinates: [CLLocationCoordinate2D], maxCount: Int) -> [CLLocationCoordinate2D] {
-        guard coordinates.count > maxCount, maxCount > 1 else { return coordinates }
-
-        let stride = Double(coordinates.count - 1) / Double(maxCount - 1)
-        return (0..<maxCount).map { index in
-            coordinates[Int((Double(index) * stride).rounded())]
-        }
     }
 
     func resetForNewRide() {
