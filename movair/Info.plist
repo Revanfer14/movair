@@ -6,8 +6,6 @@
 	<string>$(ORS_API_KEY)</string>
 	<key>SERVER_BASE_URL</key>
 	<string>$(SERVER_BASE_URL)</string>
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>GoWays saves your ride summary card to your photo library when you share it.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>location</string>
