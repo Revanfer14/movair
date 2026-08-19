@@ -355,10 +355,14 @@ struct MapViewComponent: UIViewRepresentable {
     }
 
     private func updateAnnotations(on mapView: MKMapView, context: Context) {
+        updateNavigationUserAnnotation(on: mapView, context: context)
+
+        let key = annotationKey()
+        guard key != context.coordinator.lastAnnotationKey else { return }
+        context.coordinator.lastAnnotationKey = key
+
         let existing = mapView.annotations.filter { !($0 is MKUserLocation) && !($0 is NavigationUserAnnotation) }
         mapView.removeAnnotations(existing)
-
-        updateNavigationUserAnnotation(on: mapView, context: context)
 
         if isNavigationTracking, let anchorCoord = guideAnchorCoordinate {
             let startAnnotation = RouteStartAnnotation(coordinate: anchorCoord)
@@ -382,6 +386,21 @@ struct MapViewComponent: UIViewRepresentable {
             )
             mapView.addAnnotation(destination)
         }
+    }
+
+    private func annotationKey() -> String {
+        func coordinateFragment(_ coordinate: CLLocationCoordinate2D?) -> String {
+            guard let coordinate else { return "nil" }
+            return String(format: "%.6f,%.6f", coordinate.latitude, coordinate.longitude)
+        }
+
+        return [
+            "\(isNavigationTracking)",
+            coordinateFragment(guideAnchorCoordinate),
+            "\(showsOriginMarker)",
+            coordinateFragment(originCoordinate),
+            coordinateFragment(destinationCoordinate)
+        ].joined(separator: "_")
     }
 
     private func updateNavigationUserAnnotation(on mapView: MKMapView, context: Context) {
@@ -479,6 +498,7 @@ struct MapViewComponent: UIViewRepresentable {
         var lastFittedRouteKey: String = ""
         var lastRouteOverlayKey: String = ""
         var lastConnectorKey: String = ""
+        var lastAnnotationKey: String = ""
         var userHasDraggedMap = false
         var lastAppliedHeading: Double = 0
         var lastAppliedCenter: CLLocationCoordinate2D?
@@ -675,6 +695,7 @@ struct MapViewComponent: UIViewRepresentable {
                         marker.glyphImage = UIImage(systemName: "flag.fill")
                     }
                     marker.canShowCallout = false
+                    marker.animatesWhenAdded = false
                 }
                 return view
             }
@@ -686,6 +707,7 @@ struct MapViewComponent: UIViewRepresentable {
             if let marker = view as? MKMarkerAnnotationView {
                 marker.markerTintColor = UIColor(Color.Brand.blue700)
                 marker.glyphImage = UIImage(systemName: "flag.fill")
+                marker.animatesWhenAdded = false
             }
             return view
         }

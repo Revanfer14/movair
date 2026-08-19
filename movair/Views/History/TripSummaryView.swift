@@ -6,9 +6,8 @@ struct TripSummaryView: View {
     var onDismiss: () -> Void
 
     @State private var recenterTrigger = false
-    @State private var shareImage: UIImage?
+    @State private var shareImage: TripShareImage?
     @State private var isRenderingShareCard = false
-    @State private var isShareSheetPresented = false
     @State private var shareErrorMessage: String?
 
     private let shareImageRenderer: TripShareImageRendering = TripShareImageRenderer()
@@ -41,10 +40,10 @@ struct TripSummaryView: View {
             .background(Color(.systemGroupedBackground))
         }
         .toolbar(.hidden, for: .tabBar)
-        .sheet(isPresented: $isShareSheetPresented) {
-            if let shareImage {
-                ShareSheet(items: [shareImage])
-            }
+        .sheet(item: $shareImage) { shareImage in
+            ShareSheet(items: [
+                TripShareActivityItemSource(image: shareImage.image, title: trip.routeTitle)
+            ])
         }
         .alert(
             "Couldn't create share image",
@@ -85,8 +84,8 @@ struct TripSummaryView: View {
         Task {
             defer { isRenderingShareCard = false }
             do {
-                shareImage = try await shareImageRenderer.makeImage(for: trip)
-                isShareSheetPresented = true
+                let renderedImage = try await shareImageRenderer.makeImage(for: trip)
+                shareImage = TripShareImage(image: renderedImage)
             } catch {
                 shareErrorMessage = "Couldn't render this ride as an image. Please try again."
             }
